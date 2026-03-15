@@ -395,10 +395,13 @@ export default function Portfolio({ accountId }: PortfolioProps) {
 
   const SortHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
     <TableHead
-      className="cursor-pointer select-none hover:text-foreground transition-colors"
+      className={cn(
+        "cursor-pointer select-none hover:text-foreground transition-colors",
+        field !== 'ticker' && 'text-right'
+      )}
       onClick={() => handleSort(field)}
     >
-      <span className="inline-flex items-center gap-1">
+      <span className={cn("inline-flex items-center gap-1", field !== 'ticker' && 'justify-end')}>
         {children}
         <ArrowUpDown className={cn('h-3 w-3', sortField === field ? 'text-primary' : 'text-muted-foreground/50')} />
       </span>
