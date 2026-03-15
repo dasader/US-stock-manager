@@ -85,8 +85,8 @@ export default function PositionsTable({ accountId }: PositionsTableProps) {
   const sortedPositions = useMemo(() => {
     if (!filteredPositions) return [];
     return [...filteredPositions].sort((a, b) => {
-    let aVal = a[sortField];
-    let bVal = b[sortField];
+    let aVal = (a as unknown as Record<string, unknown>)[sortField];
+    let bVal = (b as unknown as Record<string, unknown>)[sortField];
 
     // 비중 정렬의 경우 계산된 비중 사용
     if (sortField === 'weight') {
@@ -158,7 +158,7 @@ export default function PositionsTable({ accountId }: PositionsTableProps) {
                 {position.ticker}
               </button>
               {!isPriceLoaded && !isClosed && (
-                <AlertCircle className="h-4 w-4 text-amber-500" title="가격 정보 대기 중" />
+                <AlertCircle className="h-4 w-4 text-amber-500" aria-label="가격 정보 대기 중" />
               )}
               {isClosed && (
                 <span className="text-xs px-2 py-0.5 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded">
@@ -463,7 +463,7 @@ export default function PositionsTable({ accountId }: PositionsTableProps) {
                           {position.ticker}
                         </button>
                         {!isPriceLoaded && !isClosed && (
-                          <AlertCircle className="h-4 w-4 text-amber-500" title="가격 정보 대기 중" />
+                          <AlertCircle className="h-4 w-4 text-amber-500" aria-label="가격 정보 대기 중" />
                         )}
                       </div>
                     </TableCell>

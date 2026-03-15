@@ -32,7 +32,7 @@ import {
   Eye,
   X,
 } from 'lucide-react';
-import type { Cash, Dividend, DividendPreviewItem } from '@/types';
+import type { Cash, DividendPreviewItem } from '@/types';
 
 // ---------- Types ----------
 
@@ -442,10 +442,6 @@ export default function CashFlow({ accountId }: CashFlowProps) {
     });
   };
 
-  const getAccountName = (aid: number) => {
-    const a = accounts?.find((acc) => acc.id === aid);
-    return a?.name || `#${aid}`;
-  };
 
   // --- Badge helpers ---
   const typeBadge = (type: string) => {

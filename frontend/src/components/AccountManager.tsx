@@ -135,7 +135,7 @@ export default function AccountManager() {
     resetForm();
   };
 
-  const handleDelete = (id: number, name: string) => {
+  const handleDelete = (id: number, _name: string) => {
     if (id === 1) {
       alert('기본 계정은 삭제할 수 없습니다.');
       return;

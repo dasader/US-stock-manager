@@ -18,9 +18,9 @@ import {
   Brush
 } from 'recharts';
 import { useState, useMemo } from 'react';
-import { subDays, subMonths, subYears, format, startOfDay } from 'date-fns';
-import { TrendingUp, TrendingDown, Calendar, RefreshCw, ChevronDown, ChevronUp, Download, BarChart3, LineChart as LineChartIcon, Activity } from 'lucide-react';
-import type { DailySnapshot, PortfolioChartData } from '@/types';
+import { subDays, format } from 'date-fns';
+import { Calendar, RefreshCw, ChevronDown, ChevronUp, Download, BarChart3, LineChart as LineChartIcon, Activity } from 'lucide-react';
+import type { PortfolioChartData } from '@/types';
 
 interface PortfolioChartProps {
   accountId: number | null;

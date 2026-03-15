@@ -47,7 +47,7 @@ export const SkipLink = ({ href, children }: { href: string; children: React.Rea
  * WCAG 2.1 기준 색상 대비 체크 (간단한 버전)
  * 실제 프로덕션에서는 color-contrast 라이브러리 사용 권장
  */
-export function checkColorContrast(fg: string, bg: string): 'AA' | 'AAA' | 'FAIL' {
+export function checkColorContrast(_fg: string, _bg: string): 'AA' | 'AAA' | 'FAIL' {
   // 실제 구현은 색상을 RGB로 변환하여 상대 휘도 계산 필요
   // 여기서는 플레이스홀더
   return 'AA';

@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Upload, Download, X } from 'lucide-react';
+import { Upload, Download } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 
 interface CsvManagementModalProps {

@@ -110,6 +110,8 @@ export const tradesApi = {
     side?: string;
     min_amount_usd?: number;
     max_amount_usd?: number;
+    skip?: number;
+    limit?: number;
   }) => api.get<Trade[]>('/trades', { params }),
   
   getOne: (id: number) => api.get<Trade>(`/trades/${id}`),
@@ -222,6 +224,8 @@ export const cashApi = {
     transaction_type?: string;
     start_date?: string;
     end_date?: string;
+    skip?: number;
+    limit?: number;
   }) => api.get<Cash[]>('/cash', { params }),
   
   getOne: (id: number) => api.get<Cash>(`/cash/${id}`),

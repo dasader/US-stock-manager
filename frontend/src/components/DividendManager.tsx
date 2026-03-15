@@ -13,10 +13,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { PlusCircle, Download, Trash2, Loader2, Calendar, CheckCircle, XCircle, Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PlusCircle, Download, Trash2, Loader2, Calendar, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { formatCurrency } from '@/lib/utils';
-import type { Dividend, DividendYearImportRequest, DividendYearImportResponse, DividendPreviewItem } from '@/types';
+import type { Dividend, DividendYearImportRequest, DividendPreviewItem } from '@/types';
 
 interface DividendManagerProps {
   accountId: number | null;
@@ -46,7 +46,7 @@ export default function DividendManager({ accountId }: DividendManagerProps) {
 
   // 페이징 관련 state
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize] = useState(20);
 
   // 올해 필터링 관련 state
   const [showAllYears, setShowAllYears] = useState(false);

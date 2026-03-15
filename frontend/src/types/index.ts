@@ -93,6 +93,7 @@ export interface DashboardSummary {
   day_change_pl_usd?: number;
   total_dividends_usd?: number;
   total_dividends_krw?: number;
+  net_investment_usd?: number;
   fear_greed_index?: FearGreedIndexResponse;
 }
 

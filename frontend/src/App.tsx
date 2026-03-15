@@ -28,7 +28,7 @@ function AppContent() {
     return saved === null ? true : saved === 'true';
   });
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
-  const [sidebarExpanded, setSidebarExpanded] = useState(false);
+  const [, /* setSidebarExpanded */] = useState(false);
 
   useEffect(() => {
     if (darkMode) {

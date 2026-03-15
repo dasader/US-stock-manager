@@ -97,10 +97,10 @@ export default function TradeForm({ selectedAccountId }: TradeFormProps) {
                           typeof error.response.data.detail === 'object'
         ? error.response.data.detail.message
         : error.response?.data?.detail || error.message || '알 수 없는 오류가 발생했습니다.';
-      
+
       toast({
         title: "거래 등록 실패",
-        description: errorMessage,
+        description: String(errorMessage),
         variant: "destructive",
       });
     },

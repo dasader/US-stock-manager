@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Download, Upload, Trash2, RefreshCw, Edit2, Check, X } from 'lucide-react';
+import { Upload, Trash2, RefreshCw, Edit2, Check, X } from 'lucide-react';
 import type { Trade } from '@/types';
 import CsvManagementModal from './CsvManagementModal';
 

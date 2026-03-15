@@ -38,7 +38,6 @@ import {
   TrendingUp,
   TrendingDown,
   Activity,
-  DollarSign,
   Search,
   ArrowUpDown,
   RefreshCw,
@@ -48,13 +47,6 @@ import {
 } from 'lucide-react';
 import { format, subDays, subMonths, subYears } from 'date-fns';
 import type {
-  Position,
-  DashboardSummary,
-  NasdaqIndexData,
-  SectorAllocation,
-  PortfolioAnalysis as PortfolioAnalysisType,
-  PositionWithInfo,
-  ConcentrationWarning,
   DailySnapshot,
 } from '@/types';
 
@@ -198,7 +190,7 @@ export default function Portfolio({ accountId }: PortfolioProps) {
   // Queries
   // -------------------------------------------------------------------------
 
-  const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useQuery({
+  const { data: summary, refetch: refetchSummary } = useQuery({
     queryKey: ['portfolio-summary', accountId],
     queryFn: () =>
       dashboardApi

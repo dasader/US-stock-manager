@@ -1,5 +1,4 @@
-import { useCallback } from 'react';
-import { Moon, Sun, RefreshCw, DollarSign, Activity } from 'lucide-react';
+import { Moon, Sun, DollarSign, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import AccountSelector from '@/components/AccountSelector';
 

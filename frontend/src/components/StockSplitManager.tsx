@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Modal } from '@/components/ui/modal';
+import { Modal, ModalContent, ModalHeader, ModalTitle } from '@/components/ui/modal';
 import { Loader2, Eye, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import type { StockSplit, StockSplitPreview } from '@/types';
@@ -461,13 +461,16 @@ export default function StockSplitManager() {
 
       {/* 확인 모달 */}
       <Modal
-        isOpen={showConfirmModal}
-        onClose={() => {
-          setShowConfirmModal(false);
-          setPendingSplit(null);
+        open={showConfirmModal}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowConfirmModal(false);
+            setPendingSplit(null);
+          }
         }}
-        title="분할/병합 적용 확인"
       >
+        <ModalContent>
+        <ModalHeader><ModalTitle>분할/병합 적용 확인</ModalTitle></ModalHeader>
         <div className="space-y-4">
           {previewData && (
             <>
@@ -515,6 +518,7 @@ export default function StockSplitManager() {
             </Button>
           </div>
         </div>
+        </ModalContent>
       </Modal>
     </div>
   );
