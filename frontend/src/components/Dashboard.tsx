@@ -515,7 +515,8 @@ export default function Dashboard({ accountId }: DashboardProps) {
                 <CardTitle className="text-base font-semibold">계정별 요약</CardTitle>
               </CardHeader>
               <CardContent className="px-0 pb-2">
-                <div className="overflow-x-auto">
+                {/* 데스크탑: 테이블 */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-border">
@@ -536,6 +537,30 @@ export default function Dashboard({ accountId }: DashboardProps) {
                       ))}
                     </tbody>
                   </table>
+                </div>
+
+                {/* 모바일: 카드형 */}
+                <div className="md:hidden px-3 space-y-2">
+                  {summary.accounts_summary.map((acc) => {
+                    const pl = acc.total_pl_usd ?? 0;
+                    return (
+                      <div key={`acc-card-${acc.account_id}`} className="rounded-lg border border-border bg-card p-3">
+                        <div className="text-sm font-semibold mb-2 truncate">{acc.account_name ?? '—'}</div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <div className="text-[11px] text-muted-foreground mb-0.5">평가금액</div>
+                            <div className="text-sm font-numeric font-medium">{formatCurrency(acc.total_market_value_usd, 'USD')}</div>
+                          </div>
+                          <div>
+                            <div className="text-[11px] text-muted-foreground mb-0.5">총 손익</div>
+                            <div className={`text-sm font-numeric font-semibold ${pl >= 0 ? 'text-profit' : 'text-loss'}`}>
+                              {pl >= 0 ? '+' : ''}{formatCurrency(pl, 'USD')}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
