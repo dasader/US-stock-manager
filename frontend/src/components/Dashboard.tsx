@@ -515,26 +515,28 @@ export default function Dashboard({ accountId }: DashboardProps) {
                 <CardTitle className="text-base font-semibold">계정별 요약</CardTitle>
               </CardHeader>
               <CardContent className="px-0 pb-2">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left px-4 py-1.5 text-muted-foreground font-medium">계정</th>
-                      <th className="text-right px-3 py-1.5 text-muted-foreground font-medium">평가금액</th>
-                      <th className="text-right px-4 py-1.5 text-muted-foreground font-medium">총 손익</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {summary.accounts_summary.map((acc) => (
-                      <tr key={`acc-${acc.account_id}`} className="border-b border-border/50 hover:bg-muted/40">
-                        <td className="px-4 py-1.5 font-medium truncate max-w-[80px]">{acc.account_name ?? '—'}</td>
-                        <td className="text-right px-3 py-1.5 font-numeric">{formatCurrency(acc.total_market_value_usd, 'USD')}</td>
-                        <td className={`text-right px-4 py-1.5 font-numeric font-semibold ${(acc.total_pl_usd ?? 0) >= 0 ? 'text-profit' : 'text-loss'}`}>
-                          {(acc.total_pl_usd ?? 0) >= 0 ? '+' : ''}{formatCurrency(acc.total_pl_usd, 'USD')}
-                        </td>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left px-3 py-1.5 text-muted-foreground font-medium">계정</th>
+                        <th className="text-right px-2 py-1.5 text-muted-foreground font-medium whitespace-nowrap">평가금액</th>
+                        <th className="text-right px-3 py-1.5 text-muted-foreground font-medium whitespace-nowrap">총 손익</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {summary.accounts_summary.map((acc) => (
+                        <tr key={`acc-${acc.account_id}`} className="border-b border-border/50 hover:bg-muted/40">
+                          <td className="px-3 py-1.5 font-medium min-w-0 max-w-[120px] truncate">{acc.account_name ?? '—'}</td>
+                          <td className="text-right px-2 py-1.5 font-numeric whitespace-nowrap">{formatCurrency(acc.total_market_value_usd, 'USD')}</td>
+                          <td className={`text-right px-3 py-1.5 font-numeric font-semibold whitespace-nowrap ${(acc.total_pl_usd ?? 0) >= 0 ? 'text-profit' : 'text-loss'}`}>
+                            {(acc.total_pl_usd ?? 0) >= 0 ? '+' : ''}{formatCurrency(acc.total_pl_usd, 'USD')}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </CardContent>
             </Card>
           )}
