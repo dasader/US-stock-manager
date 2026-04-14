@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 from .database import init_db, engine
 from .migrations import ensure_base_currency_column
-from .api import trades, positions, prices, fx, dashboard, health, background, cash, accounts, snapshots, dividends, analysis, backup, splits, market
+from .api import trades, positions, prices, fx, dashboard, health, background, cash, accounts, snapshots, dividends, analysis, backup, splits, market, krx as krx_api
 from .services.background_price_service import background_price_service
 from .services.scheduler_service import snapshot_scheduler
 
@@ -104,6 +104,7 @@ app.include_router(analysis.router)
 app.include_router(backup.router)
 app.include_router(splits.router)
 app.include_router(market.router)
+app.include_router(krx_api.router)
 
 
 @app.get("/")
