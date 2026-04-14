@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { analysisApi, dividendsApi, snapshotsApi, positionsApi } from '@/services/api';
+import { analysisApi, dividendsApi, snapshotsApi, positionsApi, fxApi } from '@/services/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,7 +33,8 @@ import {
 import { formatCurrency, formatPercent } from '@/lib/utils';
 import { useState, useMemo } from 'react';
 import { format, subDays } from 'date-fns';
-import type { DividendByTicker, DailySnapshot } from '@/types';
+import type { DividendByTicker, DailySnapshot, Currency } from '@/types';
+import { useDisplayCurrency } from '@/hooks/useDisplayCurrency';
 
 interface PortfolioAnalysisProps {
   accountId: number | null;
@@ -77,6 +78,21 @@ const MONTH_KEYS = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', 
 export default function PortfolioAnalysis({ accountId }: PortfolioAnalysisProps) {
   const queryClient = useQueryClient();
   const [drawdownRange, setDrawdownRange] = useState<DrawdownRange>('1Y');
+  const [displayCurrency] = useDisplayCurrency();
+
+  const { data: fx } = useQuery({
+    queryKey: ['fx-rate', 'USD', 'KRW'],
+    queryFn: () => fxApi.getUSDKRW().then(res => res.data),
+    staleTime: 60_000,
+  });
+  const fxUsdKrw = fx?.rate ?? 1350;
+
+  const toDisplay = (amount: number, cur: Currency = 'USD'): number => {
+    if (cur === displayCurrency) return amount;
+    if (cur === 'USD' && displayCurrency === 'KRW') return amount * fxUsdKrw;
+    if (cur === 'KRW' && displayCurrency === 'USD') return fxUsdKrw > 0 ? amount / fxUsdKrw : 0;
+    return amount;
+  };
 
   // 포트폴리오 분석 데이터
   const { data: analysis, isLoading: analysisLoading, refetch } = useQuery({
@@ -235,13 +251,13 @@ export default function PortfolioAnalysis({ accountId }: PortfolioAnalysisProps)
     .filter(pos => (pos.market_value_usd ?? 0) > 0)
     .sort((a, b) => (b.market_value_usd ?? 0) - (a.market_value_usd ?? 0))
     .slice(0, 10)
-    .map(pos => ({ ticker: pos.ticker, value: pos.market_value_usd ?? 0, percentage: pos.weight ?? 0 }));
+    .map(pos => ({ ticker: pos.ticker, value: toDisplay(pos.market_value_usd ?? 0, 'USD'), percentage: pos.weight ?? 0 }));
 
   const topPositionsByDividend = finalDividendData
     ?.filter(div => div.total_amount_usd > 0)
     .sort((a, b) => b.total_amount_usd - a.total_amount_usd)
     .slice(0, 10)
-    .map(div => ({ ticker: div.ticker, dividend: div.total_amount_usd })) ?? [];
+    .map(div => ({ ticker: div.ticker, dividend: toDisplay(div.total_amount_usd, 'USD') })) ?? [];
 
   const sortedByPL = [...analysis.positions_with_info]
     .filter(p => p.unrealized_pl_usd !== undefined)
@@ -282,12 +298,12 @@ export default function PortfolioAnalysis({ accountId }: PortfolioAnalysisProps)
             </div>
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">평가금액</span>
-              <span className="font-numeric font-semibold">{formatCurrency(d.total_value_usd, 'USD')}</span>
+              <span className="font-numeric font-semibold">{formatCurrency(toDisplay(d.total_value_usd, 'USD'), displayCurrency)}</span>
             </div>
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">미실현 손익</span>
               <span className={`font-numeric font-semibold ${(d.unrealized_pl_usd ?? 0) >= 0 ? 'text-profit' : 'text-loss'}`}>
-                {(d.unrealized_pl_usd ?? 0) >= 0 ? '+' : ''}{formatCurrency(d.unrealized_pl_usd ?? 0, 'USD')}
+                {(d.unrealized_pl_usd ?? 0) >= 0 ? '+' : ''}{formatCurrency(toDisplay(d.unrealized_pl_usd ?? 0, 'USD'), displayCurrency)}
               </span>
             </div>
           </div>
@@ -324,7 +340,7 @@ export default function PortfolioAnalysis({ accountId }: PortfolioAnalysisProps)
             <CardTitle className="text-xs font-medium text-muted-foreground">총 평가금액</CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4">
-            <div className="text-lg font-bold font-numeric">{formatCurrency(analysis.total_market_value_usd, 'USD')}</div>
+            <div className="text-lg font-bold font-numeric">{formatCurrency(toDisplay(analysis.total_market_value_usd, 'USD'), displayCurrency)}</div>
           </CardContent>
         </Card>
         <Card>
@@ -333,7 +349,7 @@ export default function PortfolioAnalysis({ accountId }: PortfolioAnalysisProps)
           </CardHeader>
           <CardContent className="px-4 pb-4">
             <div className={`text-lg font-bold font-numeric ${analysis.total_unrealized_pl_usd >= 0 ? 'text-profit' : 'text-loss'}`}>
-              {analysis.total_unrealized_pl_usd >= 0 ? '+' : ''}{formatCurrency(analysis.total_unrealized_pl_usd, 'USD')}
+              {analysis.total_unrealized_pl_usd >= 0 ? '+' : ''}{formatCurrency(toDisplay(analysis.total_unrealized_pl_usd, 'USD'), displayCurrency)}
             </div>
             <div className={`text-xs font-numeric mt-0.5 ${analysis.total_unrealized_pl_usd >= 0 ? 'text-profit' : 'text-loss'}`}>
               {formatPercent(analysis.total_unrealized_pl_percent)}
@@ -426,7 +442,7 @@ export default function PortfolioAnalysis({ accountId }: PortfolioAnalysisProps)
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <span className="font-numeric font-semibold">{formatPercent(s.percentage)}</span>
                         <span className={`font-numeric text-[10px] w-20 text-right ${(s.unrealized_pl_usd ?? 0) >= 0 ? 'text-profit' : 'text-loss'}`}>
-                          {(s.unrealized_pl_usd ?? 0) >= 0 ? '+' : ''}{formatCurrency(s.unrealized_pl_usd ?? 0, 'USD')}
+                          {(s.unrealized_pl_usd ?? 0) >= 0 ? '+' : ''}{formatCurrency(toDisplay(s.unrealized_pl_usd ?? 0, 'USD'), displayCurrency)}
                         </span>
                       </div>
                     </div>
@@ -467,7 +483,7 @@ export default function PortfolioAnalysis({ accountId }: PortfolioAnalysisProps)
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <span className="font-numeric font-semibold">{formatPercent(ind.percentage)}</span>
                         <span className={`font-numeric text-[10px] w-20 text-right ${(ind.unrealized_pl_usd ?? 0) >= 0 ? 'text-profit' : 'text-loss'}`}>
-                          {(ind.unrealized_pl_usd ?? 0) >= 0 ? '+' : ''}{formatCurrency(ind.unrealized_pl_usd ?? 0, 'USD')}
+                          {(ind.unrealized_pl_usd ?? 0) >= 0 ? '+' : ''}{formatCurrency(toDisplay(ind.unrealized_pl_usd ?? 0, 'USD'), displayCurrency)}
                         </span>
                       </div>
                     </div>
@@ -508,7 +524,7 @@ export default function PortfolioAnalysis({ accountId }: PortfolioAnalysisProps)
                       <td className="text-right px-3 py-1.5 font-numeric">{formatPercent(pos.weight ?? 0)}</td>
                       <td className="text-right px-4 py-1.5">
                         <div className="font-numeric font-semibold text-profit">
-                          +{formatCurrency(pos.unrealized_pl_usd ?? 0, 'USD')}
+                          +{formatCurrency(toDisplay(pos.unrealized_pl_usd ?? 0, 'USD'), displayCurrency)}
                         </div>
                         <div className="font-numeric text-[10px] text-profit">{formatPercent(pos.unrealized_pl_percent ?? 0)}</div>
                       </td>
@@ -545,7 +561,7 @@ export default function PortfolioAnalysis({ accountId }: PortfolioAnalysisProps)
                       <td className="text-right px-3 py-1.5 font-numeric">{formatPercent(pos.weight ?? 0)}</td>
                       <td className="text-right px-4 py-1.5">
                         <div className="font-numeric font-semibold text-loss">
-                          {formatCurrency(pos.unrealized_pl_usd ?? 0, 'USD')}
+                          {formatCurrency(toDisplay(pos.unrealized_pl_usd ?? 0, 'USD'), displayCurrency)}
                         </div>
                         <div className="font-numeric text-[10px] text-loss">{formatPercent(pos.unrealized_pl_percent ?? 0)}</div>
                       </td>
@@ -662,7 +678,7 @@ export default function PortfolioAnalysis({ accountId }: PortfolioAnalysisProps)
                     <div className="bg-muted/50 rounded-lg p-3">
                       <div className="text-xs text-muted-foreground mb-1">구간 최고점</div>
                       <div className="text-lg font-bold font-numeric text-blue-600 dark:text-blue-400">
-                        {formatCurrency(drawdownStats.peakValue, 'USD')}
+                        {formatCurrency(toDisplay(drawdownStats.peakValue, 'USD'), displayCurrency)}
                       </div>
                       {drawdownStats.peakDate && (
                         <div className="text-[10px] text-muted-foreground font-numeric mt-0.5">
@@ -725,10 +741,10 @@ export default function PortfolioAnalysis({ accountId }: PortfolioAnalysisProps)
                   {yocData.map((item) => (
                     <tr key={item.ticker} className="border-b border-border/50 hover:bg-muted/40">
                       <td className="px-4 py-1.5 font-semibold">{item.ticker}</td>
-                      <td className="text-right px-3 py-1.5 font-numeric hidden sm:table-cell">${item.avgCost.toFixed(2)}</td>
+                      <td className="text-right px-3 py-1.5 font-numeric hidden sm:table-cell">{formatCurrency(toDisplay(item.avgCost, 'USD'), displayCurrency)}</td>
                       <td className="text-right px-3 py-1.5 font-numeric hidden md:table-cell">{item.shares.toFixed(3)}</td>
-                      <td className="text-right px-3 py-1.5 font-numeric hidden sm:table-cell">{formatCurrency(item.totalCost, 'USD')}</td>
-                      <td className="text-right px-3 py-1.5 font-numeric text-profit">{formatCurrency(item.annualDividend, 'USD')}</td>
+                      <td className="text-right px-3 py-1.5 font-numeric hidden sm:table-cell">{formatCurrency(toDisplay(item.totalCost, 'USD'), displayCurrency)}</td>
+                      <td className="text-right px-3 py-1.5 font-numeric text-profit">{formatCurrency(toDisplay(item.annualDividend, 'USD'), displayCurrency)}</td>
                       <td className="text-right px-4 py-1.5 font-numeric font-bold text-profit">{item.yoc.toFixed(2)}%</td>
                     </tr>
                   ))}
@@ -753,8 +769,8 @@ export default function PortfolioAnalysis({ accountId }: PortfolioAnalysisProps)
               <BarChart data={topPositionsByValue} margin={{ top: 10, right: 20, left: 20, bottom: 50 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:stroke-gray-700" />
                 <XAxis dataKey="ticker" angle={-45} textAnchor="end" height={60} fontSize={11} stroke="#9ca3af" />
-                <YAxis tickFormatter={(v) => `$${Math.round(v / 1000)}K`} fontSize={11} stroke="#9ca3af" />
-                <Tooltip formatter={(v: number) => [formatCurrency(v, 'USD'), '평가금액']} labelFormatter={(l) => `${l}`} />
+                <YAxis tickFormatter={(v) => displayCurrency === 'KRW' ? `₩${Math.round(v / 1_000_000)}M` : `$${Math.round(v / 1000)}K`} fontSize={11} stroke="#9ca3af" />
+                <Tooltip formatter={(v: number) => [formatCurrency(v, displayCurrency), '평가금액']} labelFormatter={(l) => `${l}`} />
                 <Bar dataKey="value" fill="#3b82f6" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -777,8 +793,8 @@ export default function PortfolioAnalysis({ accountId }: PortfolioAnalysisProps)
                 <BarChart data={topPositionsByDividend} margin={{ top: 10, right: 20, left: 20, bottom: 50 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:stroke-gray-700" />
                   <XAxis dataKey="ticker" angle={-45} textAnchor="end" height={60} fontSize={11} stroke="#9ca3af" />
-                  <YAxis tickFormatter={(v) => `$${Math.round(v)}`} fontSize={11} stroke="#9ca3af" />
-                  <Tooltip formatter={(v: number) => [formatCurrency(v, 'USD'), '배당금']} labelFormatter={(l) => `${l}`} />
+                  <YAxis tickFormatter={(v) => displayCurrency === 'KRW' ? `₩${Math.round(v / 1000)}K` : `$${Math.round(v)}`} fontSize={11} stroke="#9ca3af" />
+                  <Tooltip formatter={(v: number) => [formatCurrency(v, displayCurrency), '배당금']} labelFormatter={(l) => `${l}`} />
                   <Bar dataKey="dividend" fill="#10b981" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -817,9 +833,9 @@ export default function PortfolioAnalysis({ accountId }: PortfolioAnalysisProps)
                         <div className="text-muted-foreground truncate max-w-[150px]">{position.longName}</div>
                       </td>
                       <td className="text-right px-3 py-1.5 font-numeric font-semibold">{formatPercent(position.weight ?? 0)}</td>
-                      <td className="text-right px-3 py-1.5 font-numeric">{formatCurrency(position.market_value_usd ?? 0, 'USD')}</td>
+                      <td className="text-right px-3 py-1.5 font-numeric">{formatCurrency(toDisplay(position.market_value_usd ?? 0, 'USD'), displayCurrency)}</td>
                       <td className={`text-right px-3 py-1.5 font-numeric font-semibold ${(position.unrealized_pl_usd ?? 0) >= 0 ? 'text-profit' : 'text-loss'}`}>
-                        {(position.unrealized_pl_usd ?? 0) >= 0 ? '+' : ''}{formatCurrency(position.unrealized_pl_usd ?? 0, 'USD')}
+                        {(position.unrealized_pl_usd ?? 0) >= 0 ? '+' : ''}{formatCurrency(toDisplay(position.unrealized_pl_usd ?? 0, 'USD'), displayCurrency)}
                       </td>
                       <td className={`text-right px-4 py-1.5 font-numeric ${(position.unrealized_pl_percent ?? 0) >= 0 ? 'text-profit' : 'text-loss'}`}>
                         {formatPercent(position.unrealized_pl_percent ?? 0)}
