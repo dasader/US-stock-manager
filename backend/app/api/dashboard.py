@@ -49,34 +49,39 @@ async def get_dashboard_summary(
     
     # 포지션 목록
     positions = engine.get_all_positions(include_closed=False)
-    
-    total_market_value_usd = 0.0
-    total_unrealized_pl_usd = 0.0
-    total_cost_usd = 0.0
 
-    # TODO[multi-currency-pl]: /docs/pl_todo.md 참조. KRW 계정 혼재 시 아래 합산은 부정확.
-    # price_aggregator.calculate_position_metrics가 각 포지션의 shares*price_usd를
-    # 단순 합산하는데, KRW 포지션의 price_usd 필드는 실제로는 KRW 금액을 담고 있음.
-    # 해결 방안:
-    #   1) position_engine.get_all_positions()에 account_id 포함
-    #   2) 여기서 account_id → account.base_currency로 통화별 분리 집계
-    #   3) DashboardSummary에 per-currency 필드 추가 (total_unrealized_pl_native_usd/krw)
-    #   4) display_currency 파라미터로 환산 합계 반환
-    # 가격 데이터 조회 및 집계 (공통 서비스 사용)
+    # 계정 맵 로드 (account_id → Account, base_currency 판별용)
+    accounts_list = crud.get_accounts(db)
+    accounts_map = {a.id: a for a in accounts_list}
+
+    # 가격 데이터 조회
     price_data = price_aggregator.get_prices_for_positions(positions)
-    total_market_value_usd, total_unrealized_pl_usd, total_cost_usd = price_aggregator.calculate_position_metrics(positions, price_data)
-    
+
+    # 통화 인식 집계 (USD 기준 정규화)
+    mc_metrics = price_aggregator.calculate_position_metrics_multicurrency(
+        positions, price_data, accounts_map, fx_rate, "USD"
+    )
+
     # 포지션에 가격 정보 적용 (previous_close 포함)
     positions = price_aggregator.apply_prices_to_positions(positions, price_data)
 
-    # 통화 인식 총 시장가치 계산 (display_currency 기준)
-    # 주의: PositionEngine.get_all_positions()는 account_id를 반환하지 않으므로
-    # 혼합통화 포트폴리오에서는 정확한 per-position 환산이 불가능합니다.
-    # 전체 요약에서는 total_market_value_usd(USD 기준 집계)를 display_currency로 환산합니다.
-    if display_currency == "KRW":
-        total_value_display = total_market_value_usd * fx_rate
-    else:
-        total_value_display = total_market_value_usd
+    # display_currency 기준 총 시장가치
+    mc_display = price_aggregator.calculate_position_metrics_multicurrency(
+        positions, price_data, accounts_map, fx_rate, display_currency
+    )
+    total_value_display = mc_display["total_market_value"]
+
+    # USD 기준 집계값 (기존 변수명 유지 — 하류 코드와 호환)
+    # USD 계정 native + KRW 계정 USD 환산 합계
+    total_market_value_usd = (
+        mc_metrics["native_usd_market_value"]
+        + mc_metrics["native_krw_market_value"] / fx_rate
+    )
+    total_unrealized_pl_usd = (
+        mc_metrics["native_usd_unrealized_pl"]
+        + mc_metrics["native_krw_unrealized_pl"] / fx_rate
+    )
+    total_cost_usd = mc_metrics["total_cost"]
 
     # 각 포지션에 전일 대비 변화량 계산
     # 동일한 스냅샷 날짜를 기준으로 계산하기 위해 앵커 스냅샷 날짜를 먼저 결정 (전체 요약)
@@ -239,6 +244,10 @@ async def get_dashboard_summary(
         fear_greed_index=fear_greed_index_schema,
         display_currency=display_currency,
         total_value_display=total_value_display,
+        total_market_value_native_usd=mc_metrics["native_usd_market_value"],
+        total_market_value_native_krw=mc_metrics["native_krw_market_value"],
+        total_unrealized_pl_native_usd=mc_metrics["native_usd_unrealized_pl"],
+        total_unrealized_pl_native_krw=mc_metrics["native_krw_unrealized_pl"],
     )
 
 
