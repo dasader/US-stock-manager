@@ -106,6 +106,11 @@ async def analyze_portfolio(
         ticker = position['ticker']
         account_id_pos = position.get('account_id')
         account = accounts_map.get(account_id_pos) if account_id_pos else None
+        if account is None and account_id_pos:
+            logger.warning(
+                f"[ANALYSIS] account_id={account_id_pos} 계정 없음 → USD 기본값 사용 "
+                f"(ticker={ticker})"
+            )
         base_currency = getattr(account, 'base_currency', 'USD') if account else 'USD'
 
         raw_market_value = position.get('market_value_usd', 0) or 0
@@ -155,7 +160,7 @@ async def analyze_portfolio(
         sector_data[sector]['total_value_usd'] += market_value
         sector_data[sector]['unrealized_pl_usd'] += unrealized_pl
         raw_cost = position['avg_cost_usd'] * position['shares']
-        cost = raw_cost / fx_rate if base_currency == 'KRW' and fx_rate else raw_cost
+        cost = raw_cost / fx_rate if base_currency == 'KRW' else raw_cost
         sector_data[sector]['total_cost_usd'] += cost
 
         # 산업별 집계
