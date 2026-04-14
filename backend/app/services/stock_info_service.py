@@ -170,7 +170,12 @@ class StockInfoService:
             if cache_age < self._cache_ttl:
                 logger.info(f"[STOCK_INFO] {ticker}: 캐시에서 조회 (나이: {cache_age.seconds // 60}분)")
                 return cached_data
-        
+
+        # KRX 티커(6자리 숫자) 또는 GOLD는 yfinance 대신 별도 처리
+        from .market_resolver import resolve_market
+        if resolve_market(ticker) == "KRX":
+            return self._get_krx_stock_info(ticker)
+
         try:
             logger.info(f"[STOCK_INFO] {ticker}: yfinance로 정보 조회 시작")
             stock = yf.Ticker(ticker)
@@ -230,6 +235,40 @@ class StockInfoService:
                 'cached_at': datetime.now()
             }
     
+    def _get_krx_stock_info(self, ticker: str) -> Dict:
+        """KRX 종목/금현물 정보. yfinance 우회."""
+        from .krx_service import krx_service
+        from .market_resolver import to_krx_code
+
+        code = to_krx_code(ticker)
+        is_gold = code == "04020000"
+
+        if is_gold:
+            name = "금 현물 1kg (KRX)"
+            sector = "Precious Metals"
+            industry = "Gold Spot"
+        else:
+            name = krx_service.get_name(ticker) or ticker
+            sector = krx_service.get_sector(ticker) or "Unknown"
+            industry = sector  # KRX 업종을 industry로도 사용
+
+        stock_data = {
+            'ticker': ticker,
+            'sector': sector,
+            'industry': industry,
+            'country': 'South Korea',
+            'website': '',
+            'longName': name,
+            'shortName': name,
+            'marketCap': 0,
+            'employees': 0,
+            'businessSummary': '',
+            'cached_at': datetime.now(),
+        }
+        self._cache[ticker] = stock_data
+        logger.info(f"[STOCK_INFO] {ticker}: KRX 정보 사용 (name={name}, sector={sector})")
+        return stock_data
+
     def get_sector_industry(self, ticker: str) -> Dict[str, str]:
         """
         종목의 섹터와 산업만 빠르게 조회
