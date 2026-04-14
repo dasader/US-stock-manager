@@ -93,6 +93,9 @@ def analyze_portfolio(
     total_market_value_usd = 0.0
     total_unrealized_pl_usd = 0.0
     
+    # TODO[multi-currency-pl]: 아래 루프는 포지션의 market_value_usd / unrealized_pl_usd를
+    # 계정 base_currency 구분 없이 합산. KRW 포지션(예: GOLD)이 USD로 취급되어
+    # 섹터 비중·수익 기여도·합계가 왜곡됨. 상세: /doc/pl_todo.md
     for position in positions:
         ticker = position['ticker']
         market_value = position.get('market_value_usd', 0) or 0

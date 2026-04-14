@@ -479,7 +479,7 @@ export default function Portfolio({ accountId }: PortfolioProps) {
   // -------------------------------------------------------------------------
 
   // KPI values: pick _usd or _krw variants based on displayCurrency
-  // TODO[multi-currency-pl]: 백엔드 DashboardSummary.total_unrealized_pl_usd/krw는
+  // TODO[multi-currency-pl]: /doc/pl_todo.md 참조. 백엔드 DashboardSummary.total_unrealized_pl_usd/krw는
   // 전체 포지션을 currency 구분 없이 shares*price로 단순 합산한 값이라
   // KRW 계정 혼재 시 합계가 수학적으로 부정확함 (KRW 금액이 USD에 섞여 들어감).
   // 정확한 집계를 위해선:

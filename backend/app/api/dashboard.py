@@ -54,7 +54,7 @@ async def get_dashboard_summary(
     total_unrealized_pl_usd = 0.0
     total_cost_usd = 0.0
 
-    # TODO[multi-currency-pl]: KRW 계정 혼재 시 아래 합산은 부정확.
+    # TODO[multi-currency-pl]: /doc/pl_todo.md 참조. KRW 계정 혼재 시 아래 합산은 부정확.
     # price_aggregator.calculate_position_metrics가 각 포지션의 shares*price_usd를
     # 단순 합산하는데, KRW 포지션의 price_usd 필드는 실제로는 KRW 금액을 담고 있음.
     # 해결 방안:
