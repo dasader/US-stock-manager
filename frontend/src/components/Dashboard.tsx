@@ -375,7 +375,7 @@ export default function Dashboard({ accountId }: DashboardProps) {
         </Card>
 
         {/* 카드 2: 미실현 손익 */}
-        {/* TODO[multi-currency-pl]: /doc/pl_todo.md 참조. 현재 backend에서 혼합 통화 집계값(USD) 그대로 사용. KRW 계정 혼재 시 합산 부정확. */}
+        {/* TODO[multi-currency-pl]: /docs/pl_todo.md 참조. 현재 backend에서 혼합 통화 집계값(USD) 그대로 사용. KRW 계정 혼재 시 합산 부정확. */}
         <Card className="hover-lift relative overflow-hidden group animate-fade-in" style={{ animationDelay: '0.1s' }}>
           <div className={`absolute inset-0 ${unrealizedPL >= 0 ? 'gradient-success' : 'gradient-danger'} opacity-5 group-hover:opacity-10 transition-opacity duration-300`} />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
