@@ -1,5 +1,5 @@
 import pytest
-from app.services.market_resolver import resolve_market, validate_ticker_against_account
+from app.services.market_resolver import resolve_market, to_krx_code, validate_ticker_against_account
 
 
 def test_krx_six_digit_ticker():
@@ -28,3 +28,20 @@ def test_validate_mismatch_raises():
         validate_ticker_against_account("005930", "USD")
     with pytest.raises(ValueError, match="market mismatch"):
         validate_ticker_against_account("AAPL", "KRW")
+
+
+def test_to_krx_code_gold():
+    assert to_krx_code("GOLD") == "04020000"
+
+
+def test_to_krx_code_six_digit():
+    assert to_krx_code("005930") == "005930"
+
+
+def test_validate_unknown_currency_raises():
+    with pytest.raises(ValueError, match="unsupported account currency"):
+        validate_ticker_against_account("AAPL", "EUR")
+
+
+def test_validate_case_insensitive_currency():
+    validate_ticker_against_account("AAPL", "usd")

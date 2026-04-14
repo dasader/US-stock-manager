@@ -21,8 +21,11 @@ def to_krx_code(ticker: str) -> str:
 
 
 def validate_ticker_against_account(ticker: str, account_currency: str) -> None:
+    currency = account_currency.strip().upper()
+    if currency not in ("USD", "KRW"):
+        raise ValueError(f"unsupported account currency: {account_currency}")
     market = resolve_market(ticker)
-    expected = "KRX" if account_currency == "KRW" else "US"
+    expected = "KRX" if currency == "KRW" else "US"
     if market != expected:
         raise ValueError(
             f"market mismatch: ticker={ticker} resolves to {market}, "
