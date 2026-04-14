@@ -375,14 +375,14 @@ export default function TradeForm({ selectedAccountId }: TradeFormProps) {
 
             {/* 단가 */}
             <div className="space-y-2">
-              <Label htmlFor="price_usd" className="text-body">단가 (USD) *</Label>
+              <Label htmlFor="price_usd" className="text-body">단가 ({accountCurrency}) *</Label>
               <Input
                 id="price_usd"
                 type="number"
-                step="0.01"
+                step={accountCurrency === 'KRW' ? '1' : '0.01'}
                 value={formData.price_usd}
                 onChange={(e) => setFormData({ ...formData, price_usd: e.target.value })}
-                placeholder="100.00"
+                placeholder={accountCurrency === 'KRW' ? '75000' : '100.00'}
                 required
                 className="h-11 min-h-[44px] text-sm sm:text-base font-numeric"
               />
