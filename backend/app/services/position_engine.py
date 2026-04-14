@@ -22,8 +22,9 @@ class Lot:
 
 class Position:
     """단일 종목의 포지션"""
-    def __init__(self, ticker: str):
+    def __init__(self, ticker: str, account_id: Optional[int] = None):
         self.ticker = ticker
+        self.account_id = account_id
         self.lots: deque[Lot] = deque()
         self.total_shares = 0.0
         self.total_cost = 0.0
@@ -197,6 +198,7 @@ class Position:
         market_value = self.total_shares * current_price if current_price else None
 
         return {
+            "account_id": self.account_id,
             "ticker": self.ticker,
             "shares": self.total_shares,
             "avg_cost_usd": self.get_avg_cost(),
@@ -233,9 +235,9 @@ class PositionEngine:
 
         for trade in sorted_trades:
             ticker = trade['ticker'].upper()
-            
+
             if ticker not in self.positions:
-                self.positions[ticker] = Position(ticker)
+                self.positions[ticker] = Position(ticker, account_id=trade.get('account_id'))
 
             position = self.positions[ticker]
 

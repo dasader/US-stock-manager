@@ -289,3 +289,56 @@ def test_account_isolation_total_positions_count():
     assert krw_tickers.isdisjoint(usd_tickers), (
         f"KRW/USD 계정 간 ticker 누출: {krw_tickers & usd_tickers}"
     )
+
+
+def test_get_all_positions_includes_account_id():
+    """get_all_positions()가 account_id 필드를 포함해야 한다."""
+    trades = [
+        {
+            "id": 1,
+            "account_id": 42,
+            "ticker": "AAPL",
+            "side": "BUY",
+            "shares": 10,
+            "price_usd": 150.0,
+            "fee_usd": 0,
+            "trade_date": date(2024, 1, 10),
+        }
+    ]
+    engine = PositionEngine()
+    engine.process_trades(trades)
+    positions = engine.get_all_positions()
+    assert len(positions) == 1
+    assert positions[0]["account_id"] == 42, (
+        f"account_id가 42여야 합니다, 실제: {positions[0].get('account_id')}"
+    )
+
+
+def test_get_all_positions_account_id_uses_first_trade():
+    """동일 ticker 복수 매수 시 첫 trade의 account_id를 사용한다."""
+    trades = [
+        {
+            "id": 1,
+            "account_id": 7,
+            "ticker": "AAPL",
+            "side": "BUY",
+            "shares": 5,
+            "price_usd": 150.0,
+            "fee_usd": 0,
+            "trade_date": date(2024, 1, 10),
+        },
+        {
+            "id": 2,
+            "account_id": 7,
+            "ticker": "AAPL",
+            "side": "BUY",
+            "shares": 5,
+            "price_usd": 160.0,
+            "fee_usd": 0,
+            "trade_date": date(2024, 2, 1),
+        },
+    ]
+    engine = PositionEngine()
+    engine.process_trades(trades)
+    positions = engine.get_all_positions()
+    assert positions[0]["account_id"] == 7
