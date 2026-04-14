@@ -7,6 +7,8 @@ import {
   marketApi,
   snapshotsApi,
   analysisApi,
+  accountsApi,
+  fxApi,
 } from '@/services/api';
 import { Card, CardContent, CardHeader, CardTitle, GlassCard } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,6 +25,9 @@ import { formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { useChartTheme } from '@/hooks/useChartTheme';
 import { useToast } from '@/hooks/useToast';
+import { useDisplayCurrency } from '@/hooks/useDisplayCurrency';
+import { DisplayCurrencyToggle } from './dashboard/DisplayCurrencyToggle';
+import { CurrencyBadge } from './accounts/CurrencyBadge';
 import {
   AreaChart,
   Area,
@@ -48,6 +53,7 @@ import {
 import { format, subDays, subMonths, subYears } from 'date-fns';
 import type {
   DailySnapshot,
+  Currency,
 } from '@/types';
 
 // ---------------------------------------------------------------------------
@@ -158,6 +164,9 @@ export default function Portfolio({ accountId }: PortfolioProps) {
   const { toast } = useToast();
   const chartTheme = useChartTheme();
 
+  // Display currency toggle
+  const [displayCurrency, setDisplayCurrency] = useDisplayCurrency();
+
   // Tab & section refs
   const [activeTab, setActiveTab] = useState<TabId>('summary');
   const summaryRef = useRef<HTMLDivElement>(null);
@@ -240,12 +249,52 @@ export default function Portfolio({ accountId }: PortfolioProps) {
     refetchInterval: 2000,
   });
 
+  const { data: allAccounts } = useQuery({
+    queryKey: ['accounts', 'all'],
+    queryFn: () => accountsApi.getAll().then((r) => r.data),
+    staleTime: 60_000,
+  });
+
+  const { data: fxData } = useQuery({
+    queryKey: ['fx-rate', 'USD', 'KRW'],
+    queryFn: () => fxApi.getUSDKRW().then((r) => r.data),
+    staleTime: 60_000,
+  });
+
   useEffect(() => {
     if (bgStatus) {
       setLoadingStatus(bgStatus);
       setShowProgress(bgStatus.completed < bgStatus.total && bgStatus.total > 0);
     }
   }, [bgStatus]);
+
+  // -------------------------------------------------------------------------
+  // Currency helpers
+  // -------------------------------------------------------------------------
+
+  const accountCurrencyMap = useMemo(() => {
+    const m = new Map<number, Currency>();
+    (allAccounts ?? []).forEach((a) => m.set(a.id, (a.base_currency ?? 'USD') as Currency));
+    return m;
+  }, [allAccounts]);
+
+  const fxUsdKrw = (fxData?.rate ?? summary?.fx_rate_usd_krw ?? 1350);
+
+  const getCurForAccount = useCallback((accountId?: number): Currency =>
+    accountId != null ? (accountCurrencyMap.get(accountId) ?? 'USD') : 'USD',
+  [accountCurrencyMap]);
+
+  const getPosCurrency = useCallback((p: { currency?: Currency; account_id: number }): Currency =>
+    (p.currency as Currency | undefined) ?? getCurForAccount(p.account_id),
+  [getCurForAccount]);
+
+  /** Convert an amount from its native currency to the current displayCurrency */
+  const toDisplay = useCallback((amount: number, nativeCur: Currency): number => {
+    if (nativeCur === displayCurrency) return amount;
+    if (nativeCur === 'USD' && displayCurrency === 'KRW') return amount * fxUsdKrw;
+    if (nativeCur === 'KRW' && displayCurrency === 'USD') return fxUsdKrw > 0 ? amount / fxUsdKrw : 0;
+    return amount;
+  }, [displayCurrency, fxUsdKrw]);
 
   // -------------------------------------------------------------------------
   // Derived data
@@ -255,8 +304,11 @@ export default function Portfolio({ accountId }: PortfolioProps) {
     if (!positions) return 0;
     return positions
       .filter((p) => !p.is_closed && p.shares > 0)
-      .reduce((sum, p) => sum + (p.market_value_usd ?? 0), 0);
-  }, [positions]);
+      .reduce((sum, p) => {
+        const cur = getPosCurrency(p);
+        return sum + toDisplay(p.market_value_usd ?? 0, cur);
+      }, 0);
+  }, [positions, getPosCurrency, toDisplay]);
 
   const chartData = useMemo(() => {
     if (!snapshots?.length) return [];
@@ -275,18 +327,22 @@ export default function Portfolio({ accountId }: PortfolioProps) {
       }));
   }, [snapshots]);
 
-  // Composition bar data
+  // Composition bar data (in displayCurrency)
   const compositionData = useMemo(() => {
     if (!positions) return [];
     return positions
       .filter((p) => !p.is_closed && p.shares > 0 && (p.market_value_usd ?? 0) > 0)
-      .sort((a, b) => (b.market_value_usd ?? 0) - (a.market_value_usd ?? 0))
-      .map((p) => ({
-        ticker: p.ticker,
-        value: p.market_value_usd ?? 0,
-        weight: totalMarketValue > 0 ? ((p.market_value_usd ?? 0) / totalMarketValue) * 100 : 0,
+      .map((p) => {
+        const cur = getPosCurrency(p);
+        const displayValue = toDisplay(p.market_value_usd ?? 0, cur);
+        return { ticker: p.ticker, value: displayValue };
+      })
+      .sort((a, b) => b.value - a.value)
+      .map((d) => ({
+        ...d,
+        weight: totalMarketValue > 0 ? (d.value / totalMarketValue) * 100 : 0,
       }));
-  }, [positions, totalMarketValue]);
+  }, [positions, totalMarketValue, getPosCurrency, toDisplay]);
 
   // Holdings: filter + sort
   const filteredPositions = useMemo(() => {
@@ -320,17 +376,29 @@ export default function Portfolio({ accountId }: PortfolioProps) {
     return list;
   }, [filteredPositions, sortField, sortDir, totalMarketValue]);
 
-  // Totals row
+  // Totals row (in displayCurrency)
   const totals = useMemo(() => {
     const active = filteredPositions.filter((p) => !p.is_closed && p.shares > 0);
     return {
       shares: active.reduce((s, p) => s + p.shares, 0),
-      marketValue: active.reduce((s, p) => s + (p.market_value_usd ?? 0), 0),
-      totalCost: active.reduce((s, p) => s + p.total_cost_usd, 0),
-      unrealizedPl: active.reduce((s, p) => s + (p.unrealized_pl_usd ?? 0), 0),
-      dayChange: active.reduce((s, p) => s + (p.day_change_pl_usd ?? 0), 0),
+      marketValue: active.reduce((s, p) => {
+        const cur = getPosCurrency(p);
+        return s + toDisplay(p.market_value_usd ?? 0, cur);
+      }, 0),
+      totalCost: active.reduce((s, p) => {
+        const cur = getPosCurrency(p);
+        return s + toDisplay(p.total_cost_usd, cur);
+      }, 0),
+      unrealizedPl: active.reduce((s, p) => {
+        const cur = getPosCurrency(p);
+        return s + toDisplay(p.unrealized_pl_usd ?? 0, cur);
+      }, 0),
+      dayChange: active.reduce((s, p) => {
+        const cur = getPosCurrency(p);
+        return s + toDisplay(p.day_change_pl_usd ?? 0, cur);
+      }, 0),
     };
-  }, [filteredPositions]);
+  }, [filteredPositions, getPosCurrency, toDisplay]);
 
   // Analysis: top gainers / losers
   const { topGainers, topLosers } = useMemo(() => {
@@ -410,10 +478,22 @@ export default function Portfolio({ accountId }: PortfolioProps) {
   // Render
   // -------------------------------------------------------------------------
 
-  const unrealizedPL = summary?.total_unrealized_pl_usd ?? 0;
-  const realizedPL = summary?.total_realized_pl_usd ?? 0;
-  const dayChangePL = summary?.day_change_pl_usd ?? 0;
-  const totalPL = summary?.total_pl_usd ?? 0;
+  // KPI values: pick _usd or _krw variants based on displayCurrency
+  const unrealizedPL = displayCurrency === 'KRW'
+    ? (summary?.total_unrealized_pl_krw ?? 0)
+    : (summary?.total_unrealized_pl_usd ?? 0);
+  const realizedPL = displayCurrency === 'KRW'
+    ? (summary?.total_realized_pl_krw ?? 0)
+    : (summary?.total_realized_pl_usd ?? 0);
+  const dayChangePL = displayCurrency === 'KRW'
+    ? toDisplay(summary?.day_change_pl_usd ?? 0, 'USD')
+    : (summary?.day_change_pl_usd ?? 0);
+  const totalPL = displayCurrency === 'KRW'
+    ? (summary?.total_pl_krw ?? 0)
+    : (summary?.total_pl_usd ?? 0);
+  const totalMarketValueDisplay = displayCurrency === 'KRW'
+    ? (summary?.total_market_value_krw ?? 0)
+    : (summary?.total_market_value_usd ?? 0);
 
   return (
     <div className="space-y-0 pb-12">
@@ -452,6 +532,7 @@ export default function Portfolio({ accountId }: PortfolioProps) {
                 USD/KRW {formatNumber(summary.fx_rate_usd_krw, 0)}
               </span>
             )}
+            <DisplayCurrencyToggle value={displayCurrency} onChange={setDisplayCurrency} />
             <Button onClick={handleForceRefresh} variant="outline" size="sm" className="hover-lift">
               <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
               새로고침
@@ -491,10 +572,14 @@ export default function Portfolio({ accountId }: PortfolioProps) {
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground mb-1">총 평가금액</p>
                 <p className="text-lg font-bold font-numeric truncate">
-                  {summary ? formatCurrency(summary.total_market_value_usd, 'USD') : '--'}
+                  {summary ? formatCurrency(totalMarketValueDisplay, displayCurrency) : '--'}
                 </p>
                 <p className="text-xs text-muted-foreground font-numeric truncate">
-                  {summary ? formatCurrency(summary.total_market_value_krw, 'KRW') : ''}
+                  {summary && displayCurrency === 'USD'
+                    ? formatCurrency(summary.total_market_value_krw, 'KRW')
+                    : summary
+                    ? formatCurrency(summary.total_market_value_usd, 'USD')
+                    : ''}
                 </p>
               </div>
             </div>
@@ -507,7 +592,7 @@ export default function Portfolio({ accountId }: PortfolioProps) {
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground mb-1">미실현 손익</p>
                 <p className={cn('text-lg font-bold font-numeric truncate', plClass(unrealizedPL))}>
-                  {summary ? formatCurrency(unrealizedPL, 'USD') : '--'}
+                  {summary ? formatCurrency(unrealizedPL, displayCurrency) : '--'}
                 </p>
                 <p className={cn('text-xs font-numeric', plClass(summary?.total_unrealized_pl_percent))}>
                   {summary ? formatPercent(summary.total_unrealized_pl_percent) : ''}
@@ -523,10 +608,10 @@ export default function Portfolio({ accountId }: PortfolioProps) {
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground mb-1">총 손익</p>
                 <p className={cn('text-lg font-bold font-numeric truncate', plClass(totalPL))}>
-                  {summary ? formatCurrency(totalPL, 'USD') : '--'}
+                  {summary ? formatCurrency(totalPL, displayCurrency) : '--'}
                 </p>
                 <p className="text-xs text-muted-foreground font-numeric truncate">
-                  실현 {formatCurrency(realizedPL, 'USD')} | 일간 {formatCurrency(dayChangePL, 'USD')}
+                  실현 {formatCurrency(realizedPL, displayCurrency)} | 일간 {formatCurrency(dayChangePL, displayCurrency)}
                 </p>
               </div>
             </div>
@@ -662,19 +747,36 @@ export default function Portfolio({ accountId }: PortfolioProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {summary.accounts_summary.map((acc) => (
-                    <TableRow key={acc.account_id}>
-                      <TableCell className="font-medium">{acc.account_name}</TableCell>
-                      <TableCell className="text-right font-numeric">{formatCurrency(acc.total_market_value_usd, 'USD')}</TableCell>
-                      <TableCell className={cn('text-right font-numeric', plClass(acc.total_unrealized_pl_usd))}>
-                        {formatCurrency(acc.total_unrealized_pl_usd, 'USD')}
-                      </TableCell>
-                      <TableCell className={cn('text-right font-numeric', plClass(acc.total_realized_pl_usd))}>
-                        {formatCurrency(acc.total_realized_pl_usd, 'USD')}
-                      </TableCell>
-                      <TableCell className="text-right font-numeric">{acc.active_positions_count}</TableCell>
-                    </TableRow>
-                  ))}
+                  {summary.accounts_summary.map((acc) => {
+                    const accCur = getCurForAccount(acc.account_id);
+                    const mvDisplay = displayCurrency === 'KRW'
+                      ? acc.total_market_value_krw
+                      : acc.total_market_value_usd;
+                    const urplDisplay = displayCurrency === 'KRW'
+                      ? acc.total_unrealized_pl_krw
+                      : acc.total_unrealized_pl_usd;
+                    const rplDisplay = displayCurrency === 'KRW'
+                      ? acc.total_realized_pl_krw
+                      : acc.total_realized_pl_usd;
+                    return (
+                      <TableRow key={acc.account_id}>
+                        <TableCell className="font-medium">
+                          <span className="flex items-center gap-1.5">
+                            {acc.account_name}
+                            <CurrencyBadge currency={accCur} />
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right font-numeric">{formatCurrency(mvDisplay, displayCurrency)}</TableCell>
+                        <TableCell className={cn('text-right font-numeric', plClass(urplDisplay))}>
+                          {formatCurrency(urplDisplay, displayCurrency)}
+                        </TableCell>
+                        <TableCell className={cn('text-right font-numeric', plClass(rplDisplay))}>
+                          {formatCurrency(rplDisplay, displayCurrency)}
+                        </TableCell>
+                        <TableCell className="text-right font-numeric">{acc.active_positions_count}</TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>
@@ -720,13 +822,16 @@ export default function Portfolio({ accountId }: PortfolioProps) {
               /* ---- Mobile Card List ---- */
               <div className="divide-y divide-border">
                 {sortedPositions.map((p) => {
-                  const weight = totalMarketValue > 0 ? ((p.market_value_usd ?? 0) / totalMarketValue) * 100 : 0;
+                  const posCur = getPosCurrency(p);
+                  const mvDisp = toDisplay(p.market_value_usd ?? 0, posCur);
+                  const urplDisp = toDisplay(p.unrealized_pl_usd ?? 0, posCur);
+                  const weight = totalMarketValue > 0 ? (mvDisp / totalMarketValue) * 100 : 0;
                   return (
                     <div key={`${p.account_id}-${p.ticker}`} className="p-4 space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-sm">{p.ticker}</span>
-                        <span className={cn('font-numeric text-sm font-semibold', plClass(p.unrealized_pl_usd))}>
-                          {formatCurrency(p.unrealized_pl_usd, 'USD')}
+                        <span className={cn('font-numeric text-sm font-semibold', plClass(urplDisp))}>
+                          {formatCurrency(urplDisp, displayCurrency)}
                         </span>
                       </div>
                       <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
@@ -736,15 +841,15 @@ export default function Portfolio({ accountId }: PortfolioProps) {
                         </div>
                         <div>
                           <span className="block">평균단가</span>
-                          <span className="font-numeric text-foreground">{formatCurrency(p.avg_cost_usd, 'USD')}</span>
+                          <span className="font-numeric text-foreground">{formatCurrency(p.avg_cost_usd, posCur)}</span>
                         </div>
                         <div>
                           <span className="block">현재가</span>
-                          <span className="font-numeric text-foreground">{formatCurrency(p.market_price_usd, 'USD')}</span>
+                          <span className="font-numeric text-foreground">{formatCurrency(p.market_price_usd, posCur)}</span>
                         </div>
                         <div>
                           <span className="block">평가금액</span>
-                          <span className="font-numeric text-foreground">{formatCurrency(p.market_value_usd, 'USD')}</span>
+                          <span className="font-numeric text-foreground">{formatCurrency(mvDisp, displayCurrency)}</span>
                         </div>
                         <div>
                           <span className="block">비중</span>
@@ -784,7 +889,11 @@ export default function Portfolio({ accountId }: PortfolioProps) {
                   </TableHeader>
                   <TableBody>
                     {sortedPositions.map((p) => {
-                      const weight = totalMarketValue > 0 ? ((p.market_value_usd ?? 0) / totalMarketValue) * 100 : 0;
+                      const posCur = getPosCurrency(p);
+                      const mvDisp = toDisplay(p.market_value_usd ?? 0, posCur);
+                      const urplDisp = toDisplay(p.unrealized_pl_usd ?? 0, posCur);
+                      const dayDisp = toDisplay(p.day_change_pl_usd ?? 0, posCur);
+                      const weight = totalMarketValue > 0 ? (mvDisp / totalMarketValue) * 100 : 0;
                       return (
                         <TableRow
                           key={`${p.account_id}-${p.ticker}`}
@@ -798,18 +907,18 @@ export default function Portfolio({ accountId }: PortfolioProps) {
                             {p.ticker}
                           </TableCell>
                           <TableCell className="font-numeric text-right">{formatNumber(p.shares, p.shares % 1 === 0 ? 0 : 4)}</TableCell>
-                          <TableCell className="font-numeric text-right">{formatCurrency(p.avg_cost_usd, 'USD')}</TableCell>
-                          <TableCell className="font-numeric text-right">{formatCurrency(p.market_price_usd, 'USD')}</TableCell>
-                          <TableCell className="font-numeric text-right">{formatCurrency(p.market_value_usd, 'USD')}</TableCell>
+                          <TableCell className="font-numeric text-right">{formatCurrency(p.avg_cost_usd, posCur)}</TableCell>
+                          <TableCell className="font-numeric text-right">{formatCurrency(p.market_price_usd, posCur)}</TableCell>
+                          <TableCell className="font-numeric text-right">{formatCurrency(mvDisp, displayCurrency)}</TableCell>
                           <TableCell className="font-numeric text-right">{weight.toFixed(1)}%</TableCell>
-                          <TableCell className={cn('font-numeric text-right', plClass(p.unrealized_pl_usd), plBg(p.unrealized_pl_usd))}>
-                            {formatCurrency(p.unrealized_pl_usd, 'USD')}
+                          <TableCell className={cn('font-numeric text-right', plClass(urplDisp), plBg(urplDisp))}>
+                            {formatCurrency(urplDisp, displayCurrency)}
                           </TableCell>
                           <TableCell className={cn('font-numeric text-right', plClass(p.unrealized_pl_percent))}>
                             {formatPercent(p.unrealized_pl_percent)}
                           </TableCell>
-                          <TableCell className={cn('font-numeric text-right', plClass(p.day_change_pl_usd), plBg(p.day_change_pl_usd))}>
-                            {formatCurrency(p.day_change_pl_usd, 'USD')}
+                          <TableCell className={cn('font-numeric text-right', plClass(dayDisp), plBg(dayDisp))}>
+                            {formatCurrency(dayDisp, displayCurrency)}
                           </TableCell>
                           <TableCell className="font-numeric text-right">{p.holding_days ?? '-'}</TableCell>
                         </TableRow>
@@ -822,16 +931,16 @@ export default function Portfolio({ accountId }: PortfolioProps) {
                         <TableCell />
                         <TableCell />
                         <TableCell />
-                        <TableCell className="font-numeric text-right">{formatCurrency(totals.marketValue, 'USD')}</TableCell>
+                        <TableCell className="font-numeric text-right">{formatCurrency(totals.marketValue, displayCurrency)}</TableCell>
                         <TableCell className="font-numeric text-right">100%</TableCell>
                         <TableCell className={cn('font-numeric text-right', plClass(totals.unrealizedPl))}>
-                          {formatCurrency(totals.unrealizedPl, 'USD')}
+                          {formatCurrency(totals.unrealizedPl, displayCurrency)}
                         </TableCell>
                         <TableCell className={cn('font-numeric text-right', plClass(totals.unrealizedPl))}>
                           {totals.totalCost > 0 ? formatPercent((totals.unrealizedPl / totals.totalCost) * 100) : '-'}
                         </TableCell>
                         <TableCell className={cn('font-numeric text-right', plClass(totals.dayChange))}>
-                          {formatCurrency(totals.dayChange, 'USD')}
+                          {formatCurrency(totals.dayChange, displayCurrency)}
                         </TableCell>
                         <TableCell />
                       </TableRow>
