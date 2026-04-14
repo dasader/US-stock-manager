@@ -216,9 +216,9 @@ async def get_dashboard_summary(
     
     return schemas.DashboardSummary(
         total_market_value_usd=total_market_value_usd,
-        total_market_value_krw=total_market_value_usd * fx_rate,
+        total_market_value_krw=mc_metrics["native_usd_market_value"] * fx_rate + mc_metrics["native_krw_market_value"],
         total_unrealized_pl_usd=total_unrealized_pl_usd,
-        total_unrealized_pl_krw=total_unrealized_pl_usd * fx_rate,
+        total_unrealized_pl_krw=mc_metrics["native_usd_unrealized_pl"] * fx_rate + mc_metrics["native_krw_unrealized_pl"],
         total_unrealized_pl_percent=total_unrealized_pl_percent,
         total_realized_pl_usd=total_realized_pl_usd,
         total_realized_pl_krw=total_realized_pl_usd * fx_rate,
@@ -421,9 +421,9 @@ async def _get_account_summary(db: Session, account_id: int, fx_rate: float, fx_
     
     return schemas.DashboardSummary(
         total_market_value_usd=total_market_value_usd,
-        total_market_value_krw=total_market_value_usd * fx_rate,
+        total_market_value_krw=mc_metrics["native_usd_market_value"] * fx_rate + mc_metrics["native_krw_market_value"],
         total_unrealized_pl_usd=total_unrealized_pl_usd,
-        total_unrealized_pl_krw=total_unrealized_pl_usd * fx_rate,
+        total_unrealized_pl_krw=mc_metrics["native_usd_unrealized_pl"] * fx_rate + mc_metrics["native_krw_unrealized_pl"],
         total_unrealized_pl_percent=total_unrealized_pl_percent,
         total_realized_pl_usd=total_realized_pl_usd,
         total_realized_pl_krw=total_realized_pl_usd * fx_rate,
