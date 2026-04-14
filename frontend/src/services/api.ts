@@ -204,7 +204,7 @@ export const fxApi = {
 
 // Dashboard
 export const dashboardApi = {
-  getSummary: (params?: { account_id?: number; include_account_summaries?: boolean }) =>
+  getSummary: (params?: { account_id?: number; include_account_summaries?: boolean; display_currency?: string }) =>
     api.get<DashboardSummary>('/dashboard/summary', { params }),
 };
 
@@ -424,6 +424,24 @@ export const splitsApi = {
 // Market Index
 export const marketApi = {
   getNasdaqIndex: () => api.get<import('../types').NasdaqIndexData>('/market/indices/'),
+};
+
+// KRX
+export interface KrxTickerInfo {
+  ticker: string;
+  name: string;
+  sector?: string | null;
+}
+
+export const krxApi = {
+  search: async (q: string): Promise<KrxTickerInfo[]> => {
+    const response = await api.get<KrxTickerInfo[]>(`/krx/search`, { params: { q } });
+    return response.data;
+  },
+  info: async (code: string): Promise<KrxTickerInfo> => {
+    const response = await api.get<KrxTickerInfo>(`/krx/ticker/${code}/info`);
+    return response.data;
+  },
 };
 
 export default api;

@@ -15,7 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Plus, Trash2, RefreshCw, Wallet, TrendingUp, TrendingDown } from 'lucide-react';
-import type { Cash } from '@/types';
+import type { Cash, Currency } from '@/types';
 
 interface CashManagerProps {
   accountId: number | null;
@@ -62,6 +62,12 @@ export default function CashManager({ accountId }: CashManagerProps) {
   const getAccountName = (accountId: number) => {
     const account = accounts?.find((a) => a.id === accountId);
     return account?.name || `계정 #${accountId}`;
+  };
+
+  // 계정 ID로 통화 찾기
+  const getAccountCurrency = (accountId: number): Currency => {
+    const account = accounts?.find((a) => a.id === accountId);
+    return account?.base_currency ?? 'USD';
   };
 
   const createMutation = useMutation({
@@ -256,7 +262,7 @@ export default function CashManager({ accountId }: CashManagerProps) {
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="amount_usd">금액 (USD)</Label>
+                  <Label htmlFor="amount_usd">금액 ({form.account_id ? getAccountCurrency(typeof form.account_id === 'string' ? parseInt(form.account_id) : form.account_id) : 'USD'})</Label>
                   <Input
                     id="amount_usd"
                     type="number"
@@ -342,7 +348,7 @@ export default function CashManager({ accountId }: CashManagerProps) {
                           transaction.transaction_type === 'SELL' || 
                           transaction.transaction_type === 'DIVIDEND') && '+'}
                         {(transaction.transaction_type === 'WITHDRAW' || transaction.transaction_type === 'BUY') && '-'}
-                        {formatCurrency(transaction.amount_usd, 'USD')}
+                        {formatCurrency(transaction.amount_usd, getAccountCurrency(transaction.account_id))}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground truncate hidden lg:table-cell max-w-[130px]">
                         {transaction.note || '-'}

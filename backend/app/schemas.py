@@ -9,6 +9,7 @@ class AccountBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
     is_active: bool = True
+    base_currency: str = Field(default="USD", pattern="^(USD|KRW)$")
 
 
 class AccountCreate(AccountBase):
@@ -21,6 +22,7 @@ class AccountUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = None
     is_active: Optional[bool] = None
+    base_currency: Optional[str] = Field(None, pattern="^(USD|KRW)$")
 
 
 class AccountResponse(AccountBase):
@@ -111,6 +113,7 @@ class Position(BaseModel):
     day_change_pl_percent: Optional[float] = None  # 전일 대비 손익 변화율 (%)
     previous_close_price: Optional[float] = None  # 전일 종가 (Finnhub Quote API)
     realized_pl_usd: Optional[float] = None  # 실현 손익
+    currency: str = "USD"  # 계정 기준 통화 (USD 또는 KRW)
 
 
 class RealizedPLResponse(BaseModel):
@@ -158,6 +161,8 @@ class DashboardSummary(BaseModel):
     total_dividends_usd: Optional[float] = None  # 총 배당금 (USD)
     total_dividends_krw: Optional[float] = None  # 총 배당금 (KRW)
     fear_greed_index: Optional['FearGreedIndexResponse'] = None  # Fear & Greed Index
+    display_currency: str = "KRW"  # 표시 통화 (USD 또는 KRW)
+    total_value_display: float = 0.0  # 통화 인식 총 시장가치 (display_currency 기준)
 
 
 class PriceResponse(BaseModel):

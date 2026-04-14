@@ -16,7 +16,7 @@ import {
 import { PlusCircle, Download, Trash2, Loader2, Calendar, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { formatCurrency } from '@/lib/utils';
-import type { Dividend, DividendYearImportRequest, DividendPreviewItem } from '@/types';
+import type { Dividend, DividendYearImportRequest, DividendPreviewItem, Currency } from '@/types';
 
 interface DividendManagerProps {
   accountId: number | null;
@@ -178,6 +178,12 @@ export default function DividendManager({ accountId }: DividendManagerProps) {
       return response.data;
     },
   });
+
+  // 계정 ID로 통화 찾기
+  const getAccountCurrency = (accountId: number): Currency => {
+    const account = accounts?.find((a) => a.id === accountId);
+    return account?.base_currency ?? 'USD';
+  };
 
   // 배당금 목록 조회 (페이징 지원)
   const { data: dividends, isLoading: isDividendsLoading } = useQuery({
@@ -972,21 +978,23 @@ export default function DividendManager({ accountId }: DividendManagerProps) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {dividends.map((dividend) => (
+                    {dividends.map((dividend) => {
+                      const divCurrency = getAccountCurrency(dividend.account_id);
+                      return (
                       <TableRow key={dividend.id}>
                         <TableCell>{dividend.dividend_date}</TableCell>
                         <TableCell className="font-medium">{dividend.ticker}</TableCell>
                         <TableCell className="text-right text-xs text-muted-foreground hidden lg:table-cell">
-                          {dividend.amount_per_share ? `$${dividend.amount_per_share.toFixed(4)}` : '-'}
+                          {dividend.amount_per_share ? formatCurrency(dividend.amount_per_share, divCurrency) : '-'}
                         </TableCell>
                         <TableCell className="text-right text-xs text-muted-foreground hidden lg:table-cell">
                           {dividend.shares_held ? `${Math.round(dividend.shares_held)}주` : '-'}
                         </TableCell>
                         <TableCell className="text-right text-xs text-red-600 hidden md:table-cell">
-                          {dividend.tax_withheld_usd ? `-$${dividend.tax_withheld_usd.toFixed(2)}` : '-'}
+                          {dividend.tax_withheld_usd ? `-${formatCurrency(dividend.tax_withheld_usd, divCurrency)}` : '-'}
                         </TableCell>
                         <TableCell className="text-right text-green-600 font-semibold">
-                          {formatCurrency(dividend.amount_usd, 'USD')}
+                          {formatCurrency(dividend.amount_usd, divCurrency)}
                         </TableCell>
                         <TableCell className="hidden xl:table-cell text-xs text-muted-foreground">
                           {dividend.note || '-'}
@@ -1011,7 +1019,8 @@ export default function DividendManager({ accountId }: DividendManagerProps) {
                           </Button>
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>

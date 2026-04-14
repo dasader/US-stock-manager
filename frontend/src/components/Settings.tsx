@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { accountsApi, splitsApi, backupApi } from '@/services/api';
-import type { Account, StockSplitPreview, BackupCreateRequest, RestorePreview } from '@/types';
+import type { Account, Currency, StockSplitPreview, BackupCreateRequest, RestorePreview } from '@/types';
+import { CurrencyBadge } from '@/components/accounts/CurrencyBadge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -141,7 +142,7 @@ function AccountSection() {
 
   const [isCreating, setIsCreating] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [formData, setFormData] = useState({ name: '', description: '', is_active: true });
+  const [formData, setFormData] = useState({ name: '', description: '', is_active: true, base_currency: 'USD' as Currency });
 
   const { data: accounts, isLoading } = useQuery({
     queryKey: ['accounts'],
@@ -149,7 +150,7 @@ function AccountSection() {
   });
 
   const resetForm = () => {
-    setFormData({ name: '', description: '', is_active: true });
+    setFormData({ name: '', description: '', is_active: true, base_currency: 'USD' });
   };
 
   const createMutation = useMutation({
@@ -199,15 +200,15 @@ function AccountSection() {
       return;
     }
     if (editingId) {
-      updateMutation.mutate({ id: editingId, data: { name: formData.name.trim(), description: formData.description.trim() || undefined, is_active: formData.is_active } });
+      updateMutation.mutate({ id: editingId, data: { name: formData.name.trim(), description: formData.description.trim() || undefined, is_active: formData.is_active, base_currency: formData.base_currency } });
     } else {
-      createMutation.mutate({ name: formData.name.trim(), description: formData.description.trim() || '', is_active: formData.is_active });
+      createMutation.mutate({ name: formData.name.trim(), description: formData.description.trim() || '', is_active: formData.is_active, base_currency: formData.base_currency });
     }
   };
 
   const handleEdit = (account: Account) => {
     setEditingId(account.id);
-    setFormData({ name: account.name, description: account.description || '', is_active: account.is_active });
+    setFormData({ name: account.name, description: account.description || '', is_active: account.is_active, base_currency: account.base_currency ?? 'USD' });
     setIsCreating(true);
   };
 
@@ -254,6 +255,18 @@ function AccountSection() {
                 <Label htmlFor="acc-desc">설명</Label>
                 <Input id="acc-desc" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="선택사항" />
               </div>
+              <div>
+                <Label htmlFor="acc-currency">기준 통화</Label>
+                <select
+                  id="acc-currency"
+                  value={formData.base_currency}
+                  onChange={(e) => setFormData({ ...formData, base_currency: e.target.value as Currency })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="USD">USD (미국)</option>
+                  <option value="KRW">KRW (한국)</option>
+                </select>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <input type="checkbox" id="acc-active" checked={formData.is_active} onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })} className="h-4 w-4 accent-[#D4A853]" />
@@ -288,6 +301,7 @@ function AccountSection() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold truncate">{account.name}</span>
+                    <CurrencyBadge currency={account.base_currency ?? 'USD'} />
                     {account.id === 1 && (
                       <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-[#D4A853]/15 text-[#D4A853] rounded">기본</span>
                     )}

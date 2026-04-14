@@ -34,6 +34,9 @@ def get_positions(
     # 포지션 목록 가져오기
     positions = engine.get_all_positions(include_closed=include_closed)
     
+    # 계정별 통화 매핑 (account_id → base_currency)
+    account_currency_map: dict = {}
+
     # 각 포지션에 account_id 추가
     for position in positions:
         # 해당 ticker의 첫 번째 거래에서 account_id 가져오기
@@ -42,6 +45,13 @@ def get_positions(
             position['account_id'] = matching_trade['account_id']
         else:
             position['account_id'] = account_id or 0
+
+        # currency 필드: account_id별 base_currency 조회 (캐시)
+        acc_id = position['account_id']
+        if acc_id not in account_currency_map:
+            acc = crud.get_account(db, acc_id)
+            account_currency_map[acc_id] = acc.base_currency if acc else "USD"
+        position['currency'] = account_currency_map[acc_id]
     
     # 현재가 추가 (공통 서비스 사용)
     price_data = price_aggregator.get_prices_for_positions(positions)

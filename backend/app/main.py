@@ -7,6 +7,16 @@ from contextlib import asynccontextmanager
 import os
 import logging
 import sys
+from pathlib import Path
+
+# .env 로딩 (로컬 개발 시 필수; Docker는 env_file로 주입)
+try:
+    from dotenv import load_dotenv
+    _env_path = Path(__file__).resolve().parents[2] / ".env"
+    if _env_path.exists():
+        load_dotenv(_env_path)
+except ImportError:
+    pass
 
 # 로깅 설정
 logging.basicConfig(
@@ -19,8 +29,9 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-from .database import init_db
-from .api import trades, positions, prices, fx, dashboard, health, background, cash, accounts, snapshots, dividends, analysis, backup, splits, market
+from .database import init_db, engine
+from .migrations import ensure_base_currency_column
+from .api import trades, positions, prices, fx, dashboard, health, background, cash, accounts, snapshots, dividends, analysis, backup, splits, market, krx as krx_api
 from .services.background_price_service import background_price_service
 from .services.scheduler_service import snapshot_scheduler
 
@@ -43,6 +54,10 @@ async def lifespan(app: FastAPI):
     logger.info(f"현재 시간 (UTC): {now_utc.strftime('%Y-%m-%d %H:%M:%S %Z')}")
     logger.info(f"현재 시간 (KST): {now_kst.strftime('%Y-%m-%d %H:%M:%S %Z')}")
     
+    logger.info("DB 마이그레이션 실행 중...")
+    ensure_base_currency_column(engine)
+    logger.info("DB 마이그레이션 완료")
+
     logger.info("백그라운드 가격 서비스 시작 중...")
     background_price_service.start_background_loading()
     
@@ -99,6 +114,7 @@ app.include_router(analysis.router)
 app.include_router(backup.router)
 app.include_router(splits.router)
 app.include_router(market.router)
+app.include_router(krx_api.router)
 
 
 @app.get("/")

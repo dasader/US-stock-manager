@@ -4,6 +4,8 @@
 import yfinance as yf
 from datetime import datetime
 from typing import Optional, Dict
+from .market_resolver import resolve_market
+from .krx_service import krx_service
 
 
 class PriceService:
@@ -22,7 +24,11 @@ class PriceService:
         """
         ticker = ticker.upper()
 
-        # 캐시 확인
+        # KRX 시장 분기
+        if resolve_market(ticker) == "KRX":
+            return self._get_price_krx(ticker)
+
+        # 이하 기존 US/yfinance 로직
         if ticker in self.cache:
             cached_data = self.cache[ticker]
             cache_age = (datetime.now() - cached_data['timestamp']).seconds
@@ -104,6 +110,52 @@ class PriceService:
 
             return None
 
+    def _get_price_krx(self, ticker: str) -> Optional[Dict]:
+        """KRX 티커 가격 조회. price_usd 필드는 KRW 금액을 담음(계정 base_currency 기준)."""
+        # 캐시 확인
+        if ticker in self.cache:
+            cached_data = self.cache[ticker]
+            cache_age = (datetime.now() - cached_data['timestamp']).seconds
+            if cache_age < self.cache_duration:
+                return {
+                    "ticker": ticker,
+                    "price_usd": cached_data['price'],
+                    "previous_close": cached_data.get('previous_close'),
+                    "as_of": cached_data['as_of'],
+                    "cached": True,
+                }
+
+        price = krx_service.get_price(ticker)
+        if price is None or price <= 0:
+            # 캐시된 값이 있으면 stale이라도 반환
+            if ticker in self.cache:
+                cached_data = self.cache[ticker]
+                return {
+                    "ticker": ticker,
+                    "price_usd": cached_data['price'],
+                    "previous_close": cached_data.get('previous_close'),
+                    "as_of": cached_data['as_of'],
+                    "cached": True,
+                }
+            return None
+
+        now = datetime.now()
+        result = {
+            "ticker": ticker,
+            "price_usd": float(price),
+            "previous_close": None,
+            "as_of": now,
+            "cached": False,
+        }
+        self.cache[ticker] = {
+            "price": result['price_usd'],
+            "previous_close": None,
+            "as_of": now,
+            "timestamp": now,
+        }
+        print(f"[KRX] {ticker}: KRW {price:,.0f}")
+        return result
+
     def get_multiple_prices(self, tickers: list) -> Dict[str, Optional[Dict]]:
         """여러 티커의 가격을 한번에 조회"""
         results = {}
@@ -123,6 +175,28 @@ class PriceService:
             cached_data = self.validation_cache[ticker]
             if (datetime.now() - cached_data['timestamp']).seconds < self.validation_cache_duration:
                 return cached_data['result']
+
+        # KRX ticker: 6자리 숫자 또는 GOLD
+        if resolve_market(ticker) == "KRX":
+            name = krx_service.get_name(ticker)
+            if name:
+                result = {
+                    "ticker": ticker,
+                    "valid": True,
+                    "name": name,
+                    "exchange": "KRX",
+                    "message": "유효한 KRX 티커입니다.",
+                }
+            else:
+                result = {
+                    "ticker": ticker,
+                    "valid": False,
+                    "name": None,
+                    "exchange": None,
+                    "message": "KRX 티커를 찾을 수 없습니다.",
+                }
+            self.validation_cache[ticker] = {"result": result, "timestamp": datetime.now()}
+            return result
 
         # 간단한 티커 형식 검증 (1-5 알파벳)
         if not ticker or len(ticker) > 5 or not ticker.replace('.', '').isalpha():

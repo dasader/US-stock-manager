@@ -2,7 +2,7 @@
 대시보드 관련 API 엔드포인트
 """
 import logging
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import Optional, Dict
 from datetime import date, timedelta
@@ -24,6 +24,7 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 async def get_dashboard_summary(
     account_id: Optional[int] = None,
     include_account_summaries: bool = False,
+    display_currency: str = Query("KRW", pattern="^(USD|KRW)$"),
     db: Session = Depends(get_db)
 ):
     """대시보드 요약 정보 (전체 또는 특정 계정)"""
@@ -37,7 +38,7 @@ async def get_dashboard_summary(
     
     # 특정 계정만 조회하는 경우
     if account_id:
-        return await _get_account_summary(db, account_id, fx_rate, fx_as_of, fear_greed_data)
+        return await _get_account_summary(db, account_id, fx_rate, fx_as_of, fear_greed_data, display_currency)
     
     # 전체 계정 조회
     trades = crud.get_all_trades_for_calculation(db)
@@ -52,14 +53,31 @@ async def get_dashboard_summary(
     total_market_value_usd = 0.0
     total_unrealized_pl_usd = 0.0
     total_cost_usd = 0.0
-    
+
+    # TODO[multi-currency-pl]: /doc/pl_todo.md 참조. KRW 계정 혼재 시 아래 합산은 부정확.
+    # price_aggregator.calculate_position_metrics가 각 포지션의 shares*price_usd를
+    # 단순 합산하는데, KRW 포지션의 price_usd 필드는 실제로는 KRW 금액을 담고 있음.
+    # 해결 방안:
+    #   1) position_engine.get_all_positions()에 account_id 포함
+    #   2) 여기서 account_id → account.base_currency로 통화별 분리 집계
+    #   3) DashboardSummary에 per-currency 필드 추가 (total_unrealized_pl_native_usd/krw)
+    #   4) display_currency 파라미터로 환산 합계 반환
     # 가격 데이터 조회 및 집계 (공통 서비스 사용)
     price_data = price_aggregator.get_prices_for_positions(positions)
     total_market_value_usd, total_unrealized_pl_usd, total_cost_usd = price_aggregator.calculate_position_metrics(positions, price_data)
     
     # 포지션에 가격 정보 적용 (previous_close 포함)
     positions = price_aggregator.apply_prices_to_positions(positions, price_data)
-    
+
+    # 통화 인식 총 시장가치 계산 (display_currency 기준)
+    # 주의: PositionEngine.get_all_positions()는 account_id를 반환하지 않으므로
+    # 혼합통화 포트폴리오에서는 정확한 per-position 환산이 불가능합니다.
+    # 전체 요약에서는 total_market_value_usd(USD 기준 집계)를 display_currency로 환산합니다.
+    if display_currency == "KRW":
+        total_value_display = total_market_value_usd * fx_rate
+    else:
+        total_value_display = total_market_value_usd
+
     # 각 포지션에 전일 대비 변화량 계산
     # 동일한 스냅샷 날짜를 기준으로 계산하기 위해 앵커 스냅샷 날짜를 먼저 결정 (전체 요약)
     anchor_summary_snapshot = crud.get_latest_snapshot(db, account_id=None, ticker=None)
@@ -218,11 +236,13 @@ async def get_dashboard_summary(
         day_change_pl_usd=day_change_pl_usd,
         total_dividends_usd=total_dividends_usd,
         total_dividends_krw=total_dividends_usd * fx_rate,
-        fear_greed_index=fear_greed_index_schema
+        fear_greed_index=fear_greed_index_schema,
+        display_currency=display_currency,
+        total_value_display=total_value_display,
     )
 
 
-async def _get_account_summary(db: Session, account_id: int, fx_rate: float, fx_as_of, fear_greed_data: Optional[Dict] = None):
+async def _get_account_summary(db: Session, account_id: int, fx_rate: float, fx_as_of, fear_greed_data: Optional[Dict] = None, display_currency: str = "KRW"):
     """특정 계정의 요약 정보"""
     # 계정 조회
     account = crud.get_account(db, account_id)
@@ -246,7 +266,18 @@ async def _get_account_summary(db: Session, account_id: int, fx_rate: float, fx_
     
     # 포지션에 가격 정보 적용 (previous_close 포함)
     positions = price_aggregator.apply_prices_to_positions(positions, price_data)
-    
+
+    # 통화 인식 총 시장가치 계산 (단일 계정 — 계정의 base_currency를 사용)
+    account_base_currency = getattr(account, "base_currency", "USD")
+    if account_base_currency == display_currency:
+        total_value_display = total_market_value_usd
+    elif account_base_currency == "USD" and display_currency == "KRW":
+        total_value_display = total_market_value_usd * fx_rate
+    elif account_base_currency == "KRW" and display_currency == "USD":
+        total_value_display = total_market_value_usd / fx_rate if fx_rate > 0 else 0.0
+    else:
+        total_value_display = total_market_value_usd
+
     # 각 포지션에 전일 대비 변화량 계산
     # 동일한 스냅샷 날짜를 기준으로 계산하기 위해 앵커 스냅샷 날짜를 먼저 결정 (계정 요약)
     anchor_summary_snapshot = crud.get_latest_snapshot(db, account_id=account_id, ticker=None)
@@ -257,9 +288,9 @@ async def _get_account_summary(db: Session, account_id: int, fx_rate: float, fx_
         current_price = position.get('market_price_usd')
         shares = position.get('shares', 0)
         avg_cost = position.get('avg_cost_usd', 0)
-        
+
         day_change = None
-        
+
         # 스냅샷 조회 (요약 스냅샷의 날짜를 앵커로 사용하여 동일한 날짜 스냅샷만 사용)
         yesterday_snapshot = None
         if anchor_summary_snapshot is not None:
@@ -269,7 +300,7 @@ async def _get_account_summary(db: Session, account_id: int, fx_rate: float, fx_
                 account_id=account_id,
                 ticker=ticker
             )
-        
+
         # 방법 1: 스냅샷 기반 (우선순위 높음, unrealized_pl_usd가 있어야 함)
         if yesterday_snapshot and yesterday_snapshot.unrealized_pl_usd is not None and current_unrealized_pl is not None:
             day_change = current_unrealized_pl - yesterday_snapshot.unrealized_pl_usd
@@ -392,7 +423,9 @@ async def _get_account_summary(db: Session, account_id: int, fx_rate: float, fx_
         day_change_pl_usd=day_change_pl_usd,
         total_dividends_usd=total_dividends_usd,
         total_dividends_krw=total_dividends_usd * fx_rate,
-        fear_greed_index=fear_greed_index_schema
+        fear_greed_index=fear_greed_index_schema,
+        display_currency=display_currency,
+        total_value_display=total_value_display,
     )
 
 
@@ -511,23 +544,43 @@ async def _get_account_summary_data(db: Session, account_id: int, account_name: 
             day_change_pl_usd = total_position_day_change
             logger.debug(f"[ACCOUNT_SUMMARY] Account {account_id} Total P&L day_change: POSITIONS SUM (미실현만) = ${day_change_pl_usd:.2f}")
     
+    # 계정 통화 인식: base_currency == 'KRW'면 위 native 값들은 KRW. USD면 USD.
+    # _usd / _krw 필드 양쪽을 정확한 환산값으로 채움.
+    account_obj = crud.get_account(db, account_id)
+    base_cur = getattr(account_obj, 'base_currency', 'USD') or 'USD'
+    rate = fx_rate if fx_rate and fx_rate > 0 else 1.0
+
+    def _to_pair(native: float) -> tuple[float, float]:
+        """native 금액을 (usd, krw) 쌍으로 환산. base_cur 기준."""
+        if base_cur == 'KRW':
+            return (native / rate, native)
+        return (native, native * rate)
+
+    mv_usd, mv_krw = _to_pair(total_market_value_usd)
+    upl_usd, upl_krw = _to_pair(total_unrealized_pl_usd)
+    rpl_usd, rpl_krw = _to_pair(total_realized_pl_usd)
+    tpl_usd, tpl_krw = _to_pair(total_pl_usd)
+    cash_usd, cash_krw = _to_pair(total_cash_usd)
+    # cost는 프론트에서 사용 빈도 낮아 USD 환산본만 필드 유지
+    cost_usd = total_cost_usd / rate if base_cur == 'KRW' else total_cost_usd
+
     return schemas.AccountSummary(
         account_id=account_id,
         account_name=account_name,
-        total_market_value_usd=total_market_value_usd,
-        total_market_value_krw=total_market_value_usd * fx_rate,
-        total_unrealized_pl_usd=total_unrealized_pl_usd,
-        total_unrealized_pl_krw=total_unrealized_pl_usd * fx_rate,
+        total_market_value_usd=mv_usd,
+        total_market_value_krw=mv_krw,
+        total_unrealized_pl_usd=upl_usd,
+        total_unrealized_pl_krw=upl_krw,
         total_unrealized_pl_percent=total_unrealized_pl_percent,
-        total_realized_pl_usd=total_realized_pl_usd,
-        total_realized_pl_krw=total_realized_pl_usd * fx_rate,
-        total_pl_usd=total_pl_usd,
-        total_pl_krw=total_pl_usd * fx_rate,
-        total_cost_usd=total_cost_usd,
-        total_cash_usd=total_cash_usd,
-        total_cash_krw=total_cash_usd * fx_rate,
+        total_realized_pl_usd=rpl_usd,
+        total_realized_pl_krw=rpl_krw,
+        total_pl_usd=tpl_usd,
+        total_pl_krw=tpl_krw,
+        total_cost_usd=cost_usd,
+        total_cash_usd=cash_usd,
+        total_cash_krw=cash_krw,
         positions_count=len(positions),
         active_positions_count=active_positions_count,
-        day_change_pl_usd=day_change_pl_usd
+        day_change_pl_usd=day_change_pl_usd if base_cur == 'USD' else (day_change_pl_usd / rate if day_change_pl_usd is not None else None)
     )
 

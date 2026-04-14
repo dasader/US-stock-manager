@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { formatCurrency, formatNumber, cn } from '@/lib/utils';
 import { useToast } from '@/hooks/useToast';
 import CsvManagementModal from './CsvManagementModal';
-import type { Trade, Account } from '@/types';
+import type { Trade, Account, Currency } from '@/types';
 import {
   Plus,
   X,
@@ -175,6 +175,15 @@ export default function Trades({ accountId }: TradesProps) {
   const getAccountName = useCallback(
     (id: number) => allAccounts?.find((a: Account) => a.id === id)?.name || `#${id}`,
     [allAccounts],
+  );
+
+  const getCur = useCallback(
+    (accountId: number): Currency => {
+      const allAccountsList = accounts ?? allAccounts ?? [];
+      const a = allAccountsList.find((x: Account) => x.id === accountId);
+      return (a?.base_currency ?? 'USD') as Currency;
+    },
+    [accounts, allAccounts],
   );
 
   const paginatedTrades = useMemo(() => {
@@ -503,13 +512,13 @@ export default function Trades({ accountId }: TradesProps) {
                           <div className="flex-1 min-w-0">
                             <span className="text-sm font-numeric text-muted-foreground">
                               {formatNumber(trade.shares, trade.shares % 1 === 0 ? 0 : 4)} x{' '}
-                              {formatCurrency(trade.price_usd)}
+                              {formatCurrency(trade.price_usd, getCur(trade.account_id))}
                             </span>
                           </div>
 
                           {/* Total amount */}
                           <span className="text-sm font-semibold font-numeric text-foreground shrink-0">
-                            {formatCurrency(trade.shares * trade.price_usd)}
+                            {formatCurrency(trade.shares * trade.price_usd, getCur(trade.account_id))}
                           </span>
 
                           {/* Note indicator */}
@@ -755,33 +764,42 @@ export default function Trades({ accountId }: TradesProps) {
             </div>
 
             {/* Price */}
-            <div className="space-y-2">
-              <Label htmlFor="panel-price" className="text-sm font-medium">
-                단가 (USD) *
-              </Label>
-              <Input
-                id="panel-price"
-                type="number"
-                step="0.01"
-                value={formData.price_usd}
-                onChange={(e) => setFormData({ ...formData, price_usd: e.target.value })}
-                placeholder="100.00"
-                required
-                className="h-11 font-numeric"
-              />
-            </div>
+            {(() => {
+              const aid = typeof formData.account_id === 'string' ? parseInt(formData.account_id) : formData.account_id;
+              const selAcc = (accounts ?? allAccounts)?.find((a: Account) => a.id === aid);
+              const accCur = (selAcc?.base_currency ?? 'USD') as 'USD' | 'KRW';
+              return (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="panel-price" className="text-sm font-medium">
+                      단가 ({accCur}) *
+                    </Label>
+                    <Input
+                      id="panel-price"
+                      type="number"
+                      step={accCur === 'KRW' ? '1' : '0.01'}
+                      value={formData.price_usd}
+                      onChange={(e) => setFormData({ ...formData, price_usd: e.target.value })}
+                      placeholder={accCur === 'KRW' ? '75000' : '100.00'}
+                      required
+                      className="h-11 font-numeric"
+                    />
+                  </div>
 
-            {/* Total preview */}
-            {formData.shares && formData.price_usd && (
-              <div className="rounded-lg bg-muted/30 border border-border/50 px-4 py-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">총 거래금액</span>
-                  <span className="text-base font-bold font-numeric text-foreground">
-                    {formatCurrency(parseFloat(formData.shares) * parseFloat(formData.price_usd))}
-                  </span>
-                </div>
-              </div>
-            )}
+                  {/* Total preview */}
+                  {formData.shares && formData.price_usd && (
+                    <div className="rounded-lg bg-muted/30 border border-border/50 px-4 py-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">총 거래금액</span>
+                        <span className="text-base font-bold font-numeric text-foreground">
+                          {formatCurrency(parseFloat(formData.shares) * parseFloat(formData.price_usd), accCur)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
             {/* Date */}
             <div className="space-y-2">

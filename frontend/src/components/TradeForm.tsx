@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
-import { tradesApi, pricesApi, accountsApi, positionsApi } from '@/services/api';
+import { tradesApi, pricesApi, accountsApi, positionsApi, krxApi } from '@/services/api';
+import type { KrxTickerInfo } from '@/services/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +9,8 @@ import { Label } from '@/components/ui/label';
 import { PlusCircle, CheckCircle, XCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import type { Trade } from '@/types';
+import type { Currency } from '@/types';
+import { validateTickerForCurrency } from '@/utils/ticker';
 
 interface TradeFormProps {
   selectedAccountId: number | null;
@@ -30,6 +33,8 @@ export default function TradeForm({ selectedAccountId }: TradeFormProps) {
     message: string;
   }>({ valid: null, message: '' });
   const [isValidatingTicker, setIsValidatingTicker] = useState(false);
+  const [tickerError, setTickerError] = useState<string | null>(null);
+  const [debouncedQ, setDebouncedQ] = useState('');
 
   // 활성 계정 목록 조회
   const { data: accounts } = useQuery({
@@ -66,6 +71,30 @@ export default function TradeForm({ selectedAccountId }: TradeFormProps) {
       setFormData((prev) => ({ ...prev, account_id: selectedAccountId }));
     }
   }, [selectedAccountId]);
+
+  // 계정 통화 파생
+  const selectedAccount = accounts?.find(
+    (a) => a.id === formData.account_id || a.id === Number(formData.account_id)
+  );
+  const accountCurrency: Currency = selectedAccount?.base_currency ?? 'USD';
+  const isKRW = accountCurrency === 'KRW';
+  const tickerPlaceholder = isKRW ? '005930 또는 GOLD' : 'AAPL';
+
+  // KRX 검색 디바운스
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedQ(formData.ticker), 250);
+    return () => clearTimeout(id);
+  }, [formData.ticker]);
+
+  const needsSearch =
+    isKRW && formData.ticker.length >= 1 && !/^\d{6}$/.test(formData.ticker);
+
+  const { data: suggestions = [] } = useQuery<KrxTickerInfo[]>({
+    queryKey: ['krx-search', debouncedQ],
+    queryFn: () => krxApi.search(debouncedQ),
+    enabled: needsSearch && debouncedQ.length >= 1,
+    staleTime: 30_000,
+  });
 
   type TradeCreatePayload = Omit<Trade, 'id' | 'created_at' | 'updated_at'>;
 
@@ -245,11 +274,16 @@ export default function TradeForm({ selectedAccountId }: TradeFormProps) {
                 <Input
                   id="ticker"
                   value={formData.ticker}
-                  onChange={(e) =>
-                    setFormData({ ...formData, ticker: e.target.value.toUpperCase() })
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value.toUpperCase();
+                    setFormData({ ...formData, ticker: value });
+                    const err = selectedAccount
+                      ? validateTickerForCurrency(value, accountCurrency)
+                      : null;
+                    setTickerError(err);
+                  }}
                   onBlur={handleTickerBlur}
-                  placeholder="AAPL"
+                  placeholder={tickerPlaceholder}
                   required
                   className={`h-11 min-h-[44px] text-sm sm:text-base ${
                     tickerValidation.valid === true
@@ -270,7 +304,26 @@ export default function TradeForm({ selectedAccountId }: TradeFormProps) {
                     )
                   ) : null}
                 </div>
+                {needsSearch && suggestions.length > 0 && (
+                  <ul className="absolute z-10 mt-1 w-full max-h-60 overflow-auto rounded border bg-white dark:bg-gray-800 shadow top-full left-0">
+                    {suggestions.map((s) => (
+                      <li
+                        key={s.ticker}
+                        className="px-3 py-2 text-sm hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer"
+                        onClick={() => {
+                          setFormData({ ...formData, ticker: s.ticker });
+                          setTickerError(null);
+                        }}
+                      >
+                        <span className="font-mono">{s.ticker}</span> {s.name}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
+              {tickerError && (
+                <p className="text-red-500 text-xs mt-1">{tickerError}</p>
+              )}
               {tickerValidation.message && (
                 <p
                   className={`text-xs ${
@@ -322,14 +375,14 @@ export default function TradeForm({ selectedAccountId }: TradeFormProps) {
 
             {/* 단가 */}
             <div className="space-y-2">
-              <Label htmlFor="price_usd" className="text-body">단가 (USD) *</Label>
+              <Label htmlFor="price_usd" className="text-body">단가 ({accountCurrency}) *</Label>
               <Input
                 id="price_usd"
                 type="number"
-                step="0.01"
+                step={accountCurrency === 'KRW' ? '1' : '0.01'}
                 value={formData.price_usd}
                 onChange={(e) => setFormData({ ...formData, price_usd: e.target.value })}
-                placeholder="100.00"
+                placeholder={accountCurrency === 'KRW' ? '75000' : '100.00'}
                 required
                 className="h-11 min-h-[44px] text-sm sm:text-base font-numeric"
               />
@@ -364,7 +417,7 @@ export default function TradeForm({ selectedAccountId }: TradeFormProps) {
           <Button
             type="submit"
             className="w-full h-12 min-h-[48px] text-base sm:text-lg"
-            disabled={createTradeMutation.isPending || isValidatingTicker}
+            disabled={createTradeMutation.isPending || isValidatingTicker || !!tickerError}
             variant="gradient"
           >
             {createTradeMutation.isPending ? (

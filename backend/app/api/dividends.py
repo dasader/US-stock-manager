@@ -12,6 +12,9 @@ from ..database import get_db
 from ..services.dividend_service import dividend_service
 from ..services.fx_service import fx_service
 from ..services.position_engine import PositionEngine
+from ..services.market_resolver import resolve_market
+from ..services.krx_service import krx_service
+from ..services.dividend_tax import apply_withholding_tax
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +146,98 @@ def delete_dividend(
     return {"message": "배당금이 삭제되었습니다."}
 
 
+def _auto_import_krx(db: Session, request: schemas.DividendAutoImportRequest, account):
+    """KRX 계정 배당 자동 수집. pykrx DPS(연간 주당 배당금) + 15.4% 원천징수."""
+    from .. import models
+
+    start_date = request.start_date or date(date.today().year - 1, 1, 1)
+    end_date = request.end_date or date.today()
+
+    all_trades = crud.get_all_trades_for_calculation(db, request.account_id)
+
+    imported_count = 0
+    skipped_count = 0
+    no_shares_count = 0
+    failed_count = 0
+
+    years = list(range(start_date.year, end_date.year + 1))
+    for year in years:
+        dps = krx_service.get_dividend_per_share(request.ticker, year)
+        if dps is None or dps <= 0:
+            failed_count += 1
+            continue
+
+        # 배당 기준일(연말 영업일 근사: 12/31)
+        div_date = date(year, 12, 31)
+        if div_date < start_date or div_date > end_date:
+            continue
+
+        trades_until = [
+            t for t in all_trades
+            if t["trade_date"] <= div_date and t["ticker"] == request.ticker
+        ]
+        if not trades_until:
+            no_shares_count += 1
+            continue
+
+        engine = PositionEngine()
+        engine.process_trades(trades_until)
+        position = engine.get_position(request.ticker)
+        if not position or position.is_closed() or position.total_shares <= 0:
+            no_shares_count += 1
+            continue
+
+        shares_held = position.total_shares
+        gross = dps * shares_held
+        _, tax_withheld, net = apply_withholding_tax(gross, "KRW")
+
+        if crud.check_dividend_exists(db, request.account_id, request.ticker, div_date, net):
+            skipped_count += 1
+            continue
+
+        try:
+            dividend_create = schemas.DividendCreate(
+                account_id=request.account_id,
+                ticker=request.ticker,
+                amount_usd=net,  # KRW 단위 금액을 같은 컬럼에 기록 (계정 base_currency 기준)
+                dividend_date=div_date,
+                note=f"자동 수집 (연간 DPS ₩{dps:,.0f} x {shares_held:,.2f}주, 세금 ₩{tax_withheld:,.0f})",
+                amount_per_share=dps,
+                shares_held=shares_held,
+                tax_withheld_usd=tax_withheld,
+            )
+            db_dividend = models.Dividend(**dividend_create.model_dump(), is_auto_imported=True)
+            db.add(db_dividend)
+            db.flush()
+
+            cash_transaction = schemas.CashCreate(
+                account_id=request.account_id,
+                amount_usd=net,
+                transaction_type="DIVIDEND",
+                transaction_date=div_date,
+                note=f"{request.ticker} 배당금 (세후)",
+            )
+            db_cash = models.Cash(**cash_transaction.model_dump(), related_dividend_id=db_dividend.id)
+            db.add(db_cash)
+
+            db.commit()
+            imported_count += 1
+        except Exception as e:
+            db.rollback()
+            logger.error(
+                f"[AUTO-IMPORT-KRX] {request.ticker} 배당금 저장 실패 ({div_date}): {e}",
+                exc_info=True
+            )
+            failed_count += 1
+
+    return {
+        "imported_count": imported_count,
+        "skipped_count": skipped_count,
+        "no_shares_count": no_shares_count,
+        "failed_count": failed_count,
+    }
+
+
 @router.post("/auto-import/")
 def auto_import_dividends(
     request: schemas.DividendAutoImportRequest,
@@ -161,11 +256,23 @@ def auto_import_dividends(
     account = crud.get_account(db, request.account_id)
     if not account:
         raise HTTPException(status_code=404, detail="계정을 찾을 수 없습니다.")
-    
+
+    # 시장/통화별 라우팅
+    market = resolve_market(request.ticker)
+    if account.base_currency == "KRW" and market == "KRX":
+        return _auto_import_krx(db, request, account)
+    if account.base_currency == "USD" and market == "US":
+        pass  # fall through to existing US logic below
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"ticker/account currency mismatch: {request.ticker} vs {account.base_currency}"
+        )
+
     # 날짜 범위 설정
     start_date = request.start_date or (date.today() - timedelta(days=365))
     end_date = request.end_date or date.today()
-    
+
     try:
         # yfinance로 배당금 이력 조회 (주당 배당금)
         dividends = dividend_service.get_dividend_history(request.ticker, start_date, end_date)
@@ -208,11 +315,9 @@ def auto_import_dividends(
             # 총 배당금 계산 (주당 배당금 x 보유 수량)
             gross_dividend = amount_per_share * shares_held
             
-            # 15% 세금 원천징수
-            tax_rate = 0.15
-            tax_withheld = gross_dividend * tax_rate
-            net_dividend = gross_dividend - tax_withheld
-            
+            # 통화별 원천징수세 적용
+            _, tax_withheld, net_dividend = apply_withholding_tax(gross_dividend, "USD")
+
             # 중복 확인 (세후 배당금 기준)
             if crud.check_dividend_exists(
                 db,

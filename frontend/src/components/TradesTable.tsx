@@ -15,7 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Upload, Trash2, RefreshCw, Edit2, Check, X } from 'lucide-react';
-import type { Trade } from '@/types';
+import type { Trade, Currency } from '@/types';
 import CsvManagementModal from './CsvManagementModal';
 
 interface TradesTableProps {
@@ -77,6 +77,12 @@ export default function TradesTable({ accountId }: TradesTableProps) {
   const getAccountName = (accountId: number) => {
     const account = accounts?.find((a) => a.id === accountId);
     return account?.name || `계정 #${accountId}`;
+  };
+
+  // 계정 ID로 통화 찾기
+  const getAccountCurrency = (accountId: number): Currency => {
+    const account = accounts?.find((a) => a.id === accountId);
+    return account?.base_currency ?? 'USD';
   };
 
   const deleteTradeMutation = useMutation({
@@ -370,7 +376,7 @@ export default function TradesTable({ accountId }: TradesTableProps) {
                         <TableCell className="text-right font-medium text-sm">
                           {formatCurrency(
                             (editForm.shares || 0) * (editForm.price_usd || 0),
-                            'USD'
+                            getAccountCurrency(editForm.account_id ?? trade.account_id)
                           )}
                         </TableCell>
                         <TableCell className="hidden lg:table-cell">
@@ -428,10 +434,10 @@ export default function TradesTable({ accountId }: TradesTableProps) {
                           {formatNumber(trade.shares, 0)}
                         </TableCell>
                         <TableCell className="text-right text-sm hidden md:table-cell">
-                          {formatCurrency(trade.price_usd, 'USD')}
+                          {formatCurrency(trade.price_usd, getAccountCurrency(trade.account_id))}
                         </TableCell>
                         <TableCell className="text-right font-medium text-sm">
-                          {formatCurrency(trade.shares * trade.price_usd, 'USD')}
+                          {formatCurrency(trade.shares * trade.price_usd, getAccountCurrency(trade.account_id))}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground truncate hidden lg:table-cell max-w-[120px]">
                           {trade.note || '-'}
