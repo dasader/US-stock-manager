@@ -40,6 +40,13 @@ Thumbs.db
 #docs
 research.md
 
+# Claude Code local settings (per-user, not team shared)
+.claude/
+CLAUDE.md.backup
+
+# Worktree output logs
+*.output
+
 
 
 
