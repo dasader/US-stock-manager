@@ -1,9 +1,12 @@
 """
 가격 집계 공통 서비스
 """
+import logging
 from typing import List, Dict, Tuple
 from ..services.background_price_service import background_price_service
 from ..services.price_service import price_service
+
+logger = logging.getLogger(__name__)
 
 
 class PriceAggregator:
@@ -119,6 +122,11 @@ class PriceAggregator:
         for position in positions:
             account_id = position.get("account_id")
             account = accounts_map.get(account_id) if account_id is not None else None
+            if account is None and account_id is not None:
+                logger.warning(
+                    f"[AGGREGATOR] account_id={account_id} 계정 없음 → USD 기본값 사용 "
+                    f"(ticker={position.get('ticker')})"
+                )
             base_currency = getattr(account, "base_currency", "USD") if account else "USD"
 
             ticker = position["ticker"]
@@ -150,6 +158,8 @@ class PriceAggregator:
                 converted_unrealized_pl = native_unrealized_pl * fx_rate
                 converted_cost = native_cost * fx_rate
             elif base_currency == "KRW" and target_currency == "USD":
+                if not fx_rate:
+                    logger.warning("[AGGREGATOR] fx_rate=0 → KRW→USD 변환 불가, 0.0으로 처리")
                 converted_market_value = native_market_value / fx_rate if fx_rate else 0.0
                 converted_unrealized_pl = native_unrealized_pl / fx_rate if fx_rate else 0.0
                 converted_cost = native_cost / fx_rate if fx_rate else 0.0
