@@ -32,7 +32,7 @@ import {
   Eye,
   X,
 } from 'lucide-react';
-import type { Cash, DividendPreviewItem } from '@/types';
+import type { Cash, DividendPreviewItem, Currency } from '@/types';
 
 // ---------- Types ----------
 
@@ -47,6 +47,7 @@ interface UnifiedTimelineItem {
   date: string;
   type: 'DEPOSIT' | 'WITHDRAW' | 'BUY' | 'SELL' | 'DIVIDEND';
   amount_usd: number;
+  account_id?: number;
   ticker?: string;
   note?: string;
   amountPerShare?: number;
@@ -158,6 +159,13 @@ export default function CashFlow({ accountId }: CashFlowProps) {
     queryFn: () => accountsApi.getAll(true).then((r) => r.data),
   });
 
+  // 계정 ID로 통화 찾기
+  const getAccountCurrency = (accountId?: number): Currency => {
+    if (accountId == null) return 'USD';
+    const account = accounts?.find((a) => a.id === accountId);
+    return account?.base_currency ?? 'USD';
+  };
+
   const { data: cashSummary } = useQuery({
     queryKey: ['cash-summary', accountId],
     queryFn: () => cashApi.getSummary(accountId || undefined).then((r) => r.data),
@@ -193,6 +201,7 @@ export default function CashFlow({ accountId }: CashFlowProps) {
           date: c.transaction_date,
           type: c.transaction_type,
           amount_usd: c.amount_usd,
+          account_id: c.account_id,
           note: c.note,
           sourceType: 'cash',
           sourceId: c.id,
@@ -216,6 +225,7 @@ export default function CashFlow({ accountId }: CashFlowProps) {
           date: d.dividend_date,
           type: 'DIVIDEND',
           amount_usd: d.amount_usd,
+          account_id: d.account_id,
           ticker: d.ticker,
           note: d.note,
           amountPerShare: d.amount_per_share,
@@ -850,7 +860,7 @@ export default function CashFlow({ accountId }: CashFlowProps) {
 
                           {/* Amount */}
                           <span className={`text-sm font-semibold font-numeric shrink-0 ${positive ? 'text-profit' : 'text-loss'}`}>
-                            {positive ? '+' : '-'}{formatCurrency(item.amount_usd, 'USD')}
+                            {positive ? '+' : '-'}{formatCurrency(item.amount_usd, getAccountCurrency(item.account_id))}
                           </span>
 
                           {/* Delete */}

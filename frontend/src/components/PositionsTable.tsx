@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { positionsApi } from '@/services/api';
 import { Position } from '@/types';
+import type { Currency } from '@/types';
 import { formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -139,6 +140,7 @@ export default function PositionsTable({ accountId }: PositionsTableProps) {
   const MobilePositionCard = ({ position }: { position: Position }) => {
     const isPriceLoaded = position.market_price_usd != null;
     const isClosed = position.shares <= 0;
+    const rowCurrency: Currency = position.currency ?? 'USD';
 
     return (
       <Card className={`mb-3 hover-lift ${
@@ -186,7 +188,7 @@ export default function PositionsTable({ accountId }: PositionsTableProps) {
                   <div className={`font-bold font-numeric text-base ${
                     (position.realized_pl_usd || 0) >= 0 ? 'text-profit' : 'text-loss'
                   }`}>
-                    {formatCurrency(position.realized_pl_usd || 0, 'USD')}
+                    {formatCurrency(position.realized_pl_usd || 0, rowCurrency)}
                   </div>
                 </div>
               </>
@@ -195,13 +197,13 @@ export default function PositionsTable({ accountId }: PositionsTableProps) {
                 {/* 보유 중인 종목: 기존 정보 표시 */}
                 <div>
                   <div className="text-muted-foreground text-xs mb-1">평단가</div>
-                  <div className="font-medium font-numeric">{formatCurrency(position.avg_cost_usd, 'USD')}</div>
+                  <div className="font-medium font-numeric">{formatCurrency(position.avg_cost_usd, rowCurrency)}</div>
                 </div>
                 <div>
                   <div className="text-muted-foreground text-xs mb-1">현재가</div>
                   <div className="font-medium font-numeric">
                     {isPriceLoaded ? (
-                      formatCurrency(position.market_price_usd, 'USD')
+                      formatCurrency(position.market_price_usd, rowCurrency)
                     ) : (
                       <span className="text-amber-600 flex items-center gap-1">
                         <AlertCircle className="h-3 w-3" />
@@ -214,7 +216,7 @@ export default function PositionsTable({ accountId }: PositionsTableProps) {
                   <div className="text-muted-foreground text-xs mb-1">평가금액</div>
                   <div className="font-medium font-numeric">
                     {isPriceLoaded ? (
-                      formatCurrency(position.market_value_usd!, 'USD')
+                      formatCurrency(position.market_value_usd!, rowCurrency)
                     ) : (
                       <span className="text-amber-600 flex items-center gap-1">
                         <AlertCircle className="h-3 w-3" />
@@ -248,7 +250,7 @@ export default function PositionsTable({ accountId }: PositionsTableProps) {
                     <div className={`font-bold font-numeric text-base ${
                       position.unrealized_pl_usd >= 0 ? 'text-profit' : 'text-loss'
                     }`}>
-                      {formatCurrency(position.unrealized_pl_usd, 'USD')}
+                      {formatCurrency(position.unrealized_pl_usd, rowCurrency)}
                     </div>
                   </div>
                 )}
@@ -258,7 +260,7 @@ export default function PositionsTable({ accountId }: PositionsTableProps) {
                     <div className={`font-semibold font-numeric ${
                       position.realized_pl_usd >= 0 ? 'text-profit' : 'text-loss'
                     }`}>
-                      {formatCurrency(position.realized_pl_usd, 'USD')}
+                      {formatCurrency(position.realized_pl_usd, rowCurrency)}
                     </div>
                   </div>
                 )}
@@ -268,7 +270,7 @@ export default function PositionsTable({ accountId }: PositionsTableProps) {
                     <div className={`font-semibold font-numeric ${
                       position.day_change_pl_usd >= 0 ? 'text-profit' : 'text-loss'
                     }`}>
-                      {position.day_change_pl_usd >= 0 ? '+' : ''}{formatCurrency(position.day_change_pl_usd, 'USD')}
+                      {position.day_change_pl_usd >= 0 ? '+' : ''}{formatCurrency(position.day_change_pl_usd, rowCurrency)}
                       {position.day_change_pl_percent !== undefined && position.day_change_pl_percent !== null && (
                         <span className="ml-2 text-xs">
                           ({position.day_change_pl_percent >= 0 ? '+' : ''}{position.day_change_pl_percent.toFixed(2)}%)
@@ -446,6 +448,7 @@ export default function PositionsTable({ accountId }: PositionsTableProps) {
               sortedPositions.map((position) => {
                 const isPriceLoaded = position.market_price_usd != null;
                 const isClosed = position.shares <= 0;
+                const rowCurrency: Currency = position.currency ?? 'USD';
                 const rowClassName = isClosed
                   ? 'bg-gray-100 dark:bg-gray-800/50'
                   : !isPriceLoaded
@@ -477,14 +480,14 @@ export default function PositionsTable({ accountId }: PositionsTableProps) {
                       {isClosed ? (
                         <span className="text-muted-foreground">-</span>
                       ) : (
-                        formatCurrency(position.avg_cost_usd, 'USD')
+                        formatCurrency(position.avg_cost_usd, rowCurrency)
                       )}
                     </TableCell>
                     <TableCell className="text-right py-2 px-2 font-numeric whitespace-nowrap">
                       {isClosed ? (
                         <span className="text-muted-foreground">-</span>
                       ) : isPriceLoaded ? (
-                        formatCurrency(position.market_price_usd, 'USD')
+                        formatCurrency(position.market_price_usd, rowCurrency)
                       ) : (
                         <span className="text-amber-600 flex items-center justify-end gap-1">
                           <AlertCircle className="h-3 w-3" />
@@ -496,7 +499,7 @@ export default function PositionsTable({ accountId }: PositionsTableProps) {
                       {isClosed ? (
                         <span className="text-muted-foreground">-</span>
                       ) : isPriceLoaded ? (
-                        formatCurrency(position.market_value_usd!, 'USD')
+                        formatCurrency(position.market_value_usd!, rowCurrency)
                       ) : (
                         <span className="text-amber-600 flex items-center justify-end gap-1">
                           <AlertCircle className="h-3 w-3" />
@@ -513,7 +516,7 @@ export default function PositionsTable({ accountId }: PositionsTableProps) {
                             ? 'text-green-600 dark:text-green-400'
                             : 'text-red-600 dark:text-red-400'
                         }>
-                          {position.day_change_pl_usd >= 0 ? '+' : ''}{formatCurrency(position.day_change_pl_usd, 'USD')}
+                          {position.day_change_pl_usd >= 0 ? '+' : ''}{formatCurrency(position.day_change_pl_usd, rowCurrency)}
                         </span>
                       ) : (
                         <span className="text-muted-foreground text-xs">-</span>
@@ -541,7 +544,7 @@ export default function PositionsTable({ accountId }: PositionsTableProps) {
                             ? 'text-green-600 dark:text-green-400'
                             : 'text-red-600 dark:text-red-400'
                         }>
-                          {formatCurrency(position.realized_pl_usd, 'USD')}
+                          {formatCurrency(position.realized_pl_usd, rowCurrency)}
                         </span>
                       ) : (
                         <span className="text-muted-foreground">-</span>
@@ -556,7 +559,7 @@ export default function PositionsTable({ accountId }: PositionsTableProps) {
                             ? 'text-green-600 dark:text-green-400'
                             : 'text-red-600 dark:text-red-400'
                         }>
-                          {formatCurrency(position.unrealized_pl_usd, 'USD')}
+                          {formatCurrency(position.unrealized_pl_usd, rowCurrency)}
                         </span>
                       ) : (
                         <span className="text-amber-600 dark:text-amber-400 flex items-center justify-end gap-1">
