@@ -1,0 +1,31 @@
+from unittest.mock import patch
+import pandas as pd
+from app.services.krx_service import krx_service
+
+
+@patch("app.services.krx_service.stock.get_market_ticker_name")
+def test_get_name(mock_name):
+    mock_name.return_value = "삼성전자"
+    assert krx_service.get_name("005930") == "삼성전자"
+    mock_name.assert_called_once_with("005930")
+
+
+@patch("app.services.krx_service.stock.get_market_ticker_name")
+def test_get_name_gold(mock_name):
+    mock_name.return_value = "금 99.99_1Kg"
+    krx_service.get_name("GOLD")
+    mock_name.assert_called_once_with("04020000")
+
+
+@patch("app.services.krx_service.stock.get_market_ohlcv_by_date")
+def test_get_price(mock_ohlcv):
+    df = pd.DataFrame({"종가": [75000.0]}, index=pd.to_datetime(["2026-04-14"]))
+    mock_ohlcv.return_value = df
+    price = krx_service.get_price("005930")
+    assert price == 75000.0
+
+
+@patch("app.services.krx_service.stock.get_market_ohlcv_by_date")
+def test_get_price_empty_returns_none(mock_ohlcv):
+    mock_ohlcv.return_value = pd.DataFrame()
+    assert krx_service.get_price("005930") is None
