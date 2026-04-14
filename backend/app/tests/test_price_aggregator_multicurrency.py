@@ -162,3 +162,20 @@ def test_mixed_accounts_no_double_fx():
     assert result_krw["total_unrealized_pl"] / FX_RATE == pytest.approx(
         result_usd["total_unrealized_pl"], rel=1e-4
     )
+
+
+# --------------------------------------------------------------------------
+# 빈 포지션 (경계값)
+# --------------------------------------------------------------------------
+
+def test_empty_positions_returns_all_zeros():
+    """빈 포지션 리스트 → 모든 집계값이 0.0이어야 한다"""
+    agg = PriceAggregator()
+    result = agg.calculate_position_metrics_multicurrency([], {}, {}, 1400.0, "USD")
+    assert result["total_market_value"] == 0.0
+    assert result["total_unrealized_pl"] == 0.0
+    assert result["total_cost"] == 0.0
+    assert result["native_usd_market_value"] == 0.0
+    assert result["native_krw_market_value"] == 0.0
+    assert result["native_usd_unrealized_pl"] == 0.0
+    assert result["native_krw_unrealized_pl"] == 0.0
