@@ -9,6 +9,7 @@ class AccountBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
     is_active: bool = True
+    base_currency: str = Field(default="USD", pattern="^(USD|KRW)$")
 
 
 class AccountCreate(AccountBase):
@@ -21,6 +22,7 @@ class AccountUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = None
     is_active: Optional[bool] = None
+    base_currency: Optional[str] = Field(None, pattern="^(USD|KRW)$")
 
 
 class AccountResponse(AccountBase):
