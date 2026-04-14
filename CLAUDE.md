@@ -71,7 +71,7 @@ core/exceptions.py
 
 **핵심 서비스:**
 - `services/position_engine.py` — FIFO 매칭으로 실현/미실현 손익 계산. 가장 핵심 로직.
-- `services/price_service.py` / `price_aggregator.py` — yfinance + Finnhub 멀티소스 가격 조회
+- `services/price_service.py` / `price_aggregator.py` — yfinance 기반 가격 조회 및 집계
 - `services/fx_service.py` — USD→KRW 환율 변환
 - `services/stock_info_service.py` — 섹터/산업군 분류 (yfinance 기반)
 - `services/scheduler_service.py` — APScheduler로 일별 스냅샷 생성
