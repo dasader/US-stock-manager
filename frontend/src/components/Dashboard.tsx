@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { dashboardApi, backgroundApi, positionsApi, marketApi } from '@/services/api';
+import { dashboardApi, backgroundApi, positionsApi, marketApi, accountsApi, fxApi } from '@/services/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DashboardSkeleton } from '@/components/ui/skeleton';
@@ -20,6 +20,7 @@ import PortfolioChart from './PortfolioChart';
 import { useDisplayCurrency } from '../hooks/useDisplayCurrency';
 import { DisplayCurrencyToggle } from './dashboard/DisplayCurrencyToggle';
 import { CurrencyBadge } from './accounts/CurrencyBadge';
+import type { Currency } from '@/types';
 
 interface LoadingStatus {
   total: number;
@@ -76,6 +77,35 @@ export default function Dashboard({ accountId }: DashboardProps) {
     retry: 1,
   });
 
+  // 계정 목록 (base_currency 조회용)
+  const { data: allAccounts } = useQuery({
+    queryKey: ['accounts', 'all'],
+    queryFn: async () => (await accountsApi.getAll()).data,
+  });
+  const accountCurrencyMap = useMemo(() => {
+    const m = new Map<number, Currency>();
+    (allAccounts ?? []).forEach((a: any) => m.set(a.id, (a.base_currency ?? 'USD') as Currency));
+    return m;
+  }, [allAccounts]);
+
+  // FX 환율
+  const { data: fxData } = useQuery({
+    queryKey: ['fx-rate', 'USD', 'KRW'],
+    queryFn: () => fxApi.getUSDKRW().then((r) => r.data),
+    staleTime: 60_000,
+  });
+  const fxUsdKrw = fxData?.rate ?? summary?.fx_rate_usd_krw ?? 1350;
+
+  const toDisplay = (amount: number, cur: Currency): number => {
+    if (cur === displayCurrency) return amount;
+    if (cur === 'USD' && displayCurrency === 'KRW') return amount * fxUsdKrw;
+    if (cur === 'KRW' && displayCurrency === 'USD') return fxUsdKrw > 0 ? amount / fxUsdKrw : 0;
+    return amount;
+  };
+
+  const getCurForAccount = (accountId?: number): Currency =>
+    accountId != null ? (accountCurrencyMap.get(accountId) ?? 'USD') : 'USD';
+
   // 백그라운드 로딩 상태 조회
   const { data: bgStatus } = useQuery({
     queryKey: ['background-loading-status'],
@@ -115,13 +145,17 @@ export default function Dashboard({ accountId }: DashboardProps) {
       .slice(0, 8);
   }, [positions]);
 
-  // 포트폴리오 전체 시장가 (비중 계산용)
-  const totalMarketValue = useMemo(() => {
+  // 포트폴리오 전체 시장가 (비중 계산용, 통화 인식)
+  const totalMarketValueDisplay = useMemo(() => {
     if (!positions) return 0;
     return positions
       .filter((p) => !p.is_closed)
-      .reduce((sum, p) => sum + (p.market_value_usd ?? 0), 0);
-  }, [positions]);
+      .reduce((sum, p) => {
+        const cur = (p.currency as Currency) ?? getCurForAccount(p.account_id);
+        return sum + toDisplay(p.market_value_usd ?? 0, cur);
+      }, 0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [positions, displayCurrency, fxUsdKrw, accountCurrencyMap]);
 
   const unrealizedPL = summary?.total_unrealized_pl_usd ?? 0;
   const realizedPL = summary?.total_realized_pl_usd ?? 0;
@@ -341,6 +375,7 @@ export default function Dashboard({ accountId }: DashboardProps) {
         </Card>
 
         {/* 카드 2: 미실현 손익 */}
+        {/* TODO: currency-aware aggregation — 현재 backend에서 혼합 통화 집계값(USD) 그대로 사용. KRW 계정 혼재 시 합산 부정확. */}
         <Card className="hover-lift relative overflow-hidden group animate-fade-in" style={{ animationDelay: '0.1s' }}>
           <div className={`absolute inset-0 ${unrealizedPL >= 0 ? 'gradient-success' : 'gradient-danger'} opacity-5 group-hover:opacity-10 transition-opacity duration-300`} />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
@@ -429,13 +464,16 @@ export default function Dashboard({ accountId }: DashboardProps) {
                   </thead>
                   <tbody>
                     {topPositions.map((pos) => {
-                      const plUSD = pos.unrealized_pl_usd ?? 0;
+                      const posCur = (pos.currency as Currency) ?? getCurForAccount(pos.account_id);
+                      const mvDisplay = toDisplay(pos.market_value_usd ?? 0, posCur);
+                      const plDisplay = toDisplay(pos.unrealized_pl_usd ?? 0, posCur);
                       const plPct = pos.unrealized_pl_percent ?? 0;
                       const weight =
-                        totalMarketValue > 0
-                          ? ((pos.market_value_usd ?? 0) / totalMarketValue) * 100
+                        totalMarketValueDisplay > 0
+                          ? (mvDisplay / totalMarketValueDisplay) * 100
                           : 0;
-                      const dayChg = pos.day_change_pl_usd ?? null;
+                      const dayChgRaw = pos.day_change_pl_usd ?? null;
+                      const dayChgDisplay = dayChgRaw != null ? toDisplay(dayChgRaw, posCur) : null;
                       return (
                         <tr
                           key={`${pos.account_id}-${pos.ticker}`}
@@ -446,22 +484,22 @@ export default function Dashboard({ accountId }: DashboardProps) {
                           </td>
                           <td className="text-right px-3 py-1.5 font-numeric text-xs hidden sm:table-cell">
                             {pos.market_price_usd != null
-                              ? `$${pos.market_price_usd.toFixed(2)}`
+                              ? formatCurrency(pos.market_price_usd, posCur)
                               : '-'}
                           </td>
                           <td className="text-right px-3 py-1.5 font-numeric text-xs">
-                            {formatCurrency(pos.market_value_usd ?? 0, 'USD')}
+                            {formatCurrency(mvDisplay, displayCurrency)}
                           </td>
                           <td className="text-right px-3 py-1.5 font-numeric text-xs hidden md:table-cell">
                             {weight.toFixed(1)}%
                           </td>
-                          <td className={`text-right px-3 py-1.5 font-numeric text-xs font-semibold ${plUSD >= 0 ? 'text-profit' : 'text-loss'}`}>
-                            {plUSD >= 0 ? '+' : ''}{formatCurrency(plUSD, 'USD')}
+                          <td className={`text-right px-3 py-1.5 font-numeric text-xs font-semibold ${plDisplay >= 0 ? 'text-profit' : 'text-loss'}`}>
+                            {plDisplay >= 0 ? '+' : ''}{formatCurrency(plDisplay, displayCurrency)}
                             <span className="text-[10px] ml-1 opacity-80">({formatPercent(plPct)})</span>
                           </td>
-                          <td className={`text-right px-4 py-1.5 font-numeric text-xs hidden lg:table-cell ${dayChg != null ? (dayChg >= 0 ? 'text-profit' : 'text-loss') : 'text-muted-foreground'}`}>
-                            {dayChg != null
-                              ? `${dayChg >= 0 ? '+' : ''}${formatCurrency(dayChg, 'USD')}`
+                          <td className={`text-right px-4 py-1.5 font-numeric text-xs hidden lg:table-cell ${dayChgDisplay != null ? (dayChgDisplay >= 0 ? 'text-profit' : 'text-loss') : 'text-muted-foreground'}`}>
+                            {dayChgDisplay != null
+                              ? `${dayChgDisplay >= 0 ? '+' : ''}${formatCurrency(dayChgDisplay, displayCurrency)}`
                               : '-'}
                           </td>
                         </tr>
@@ -561,24 +599,30 @@ export default function Dashboard({ accountId }: DashboardProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {summary.accounts_summary.map((acc) => (
-                        <tr key={`acc-${acc.account_id}`} className="border-b border-border/50 hover:bg-muted/40">
-                          <td className="px-3 py-1.5 font-medium min-w-0 max-w-[140px]">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="truncate">{acc.account_name ?? '—'}</span>
-                            </div>
-                          </td>
-                          <td className="text-right px-2 py-1.5 font-numeric whitespace-nowrap">
-                            {formatCurrency(acc.total_market_value_usd, 'USD')}
-                            {acc.total_market_value_usd === 0 && (acc.active_positions_count ?? 0) > 0 && (
-                              <span className="block text-[10px] text-muted-foreground">(시세 로딩 중)</span>
-                            )}
-                          </td>
-                          <td className={`text-right px-3 py-1.5 font-numeric font-semibold whitespace-nowrap ${(acc.total_pl_usd ?? 0) >= 0 ? 'text-profit' : 'text-loss'}`}>
-                            {(acc.total_pl_usd ?? 0) >= 0 ? '+' : ''}{formatCurrency(acc.total_pl_usd, 'USD')}
-                          </td>
-                        </tr>
-                      ))}
+                      {summary.accounts_summary.map((acc) => {
+                        const accCur = getCurForAccount(acc.account_id);
+                        const mvDisp = toDisplay(acc.total_market_value_usd, accCur);
+                        const plDisp = toDisplay(acc.total_pl_usd ?? 0, accCur);
+                        return (
+                          <tr key={`acc-${acc.account_id}`} className="border-b border-border/50 hover:bg-muted/40">
+                            <td className="px-3 py-1.5 font-medium min-w-0 max-w-[140px]">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="truncate">{acc.account_name ?? '—'}</span>
+                                <CurrencyBadge currency={accCur} />
+                              </div>
+                            </td>
+                            <td className="text-right px-2 py-1.5 font-numeric whitespace-nowrap">
+                              {formatCurrency(mvDisp, displayCurrency)}
+                              {acc.total_market_value_usd === 0 && (acc.active_positions_count ?? 0) > 0 && (
+                                <span className="block text-[10px] text-muted-foreground">(시세 로딩 중)</span>
+                              )}
+                            </td>
+                            <td className={`text-right px-3 py-1.5 font-numeric font-semibold whitespace-nowrap ${plDisp >= 0 ? 'text-profit' : 'text-loss'}`}>
+                              {plDisp >= 0 ? '+' : ''}{formatCurrency(plDisp, displayCurrency)}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -586,18 +630,20 @@ export default function Dashboard({ accountId }: DashboardProps) {
                 {/* 모바일: 카드형 */}
                 <div className="md:hidden px-3 space-y-2">
                   {summary.accounts_summary.map((acc) => {
-                    const pl = acc.total_pl_usd ?? 0;
+                    const accCur = getCurForAccount(acc.account_id);
+                    const mvDisp = toDisplay(acc.total_market_value_usd, accCur);
+                    const pl = toDisplay(acc.total_pl_usd ?? 0, accCur);
                     return (
                       <div key={`acc-card-${acc.account_id}`} className="rounded-lg border border-border bg-card p-3">
                         <div className="flex items-center gap-1.5 mb-2">
                           <span className="text-sm font-semibold truncate">{acc.account_name ?? '—'}</span>
-                          <CurrencyBadge currency="USD" />
+                          <CurrencyBadge currency={accCur} />
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
                             <div className="text-[11px] text-muted-foreground mb-0.5">평가금액</div>
                             <div className="text-sm font-numeric font-medium">
-                              {formatCurrency(acc.total_market_value_usd, 'USD')}
+                              {formatCurrency(mvDisp, displayCurrency)}
                               {acc.total_market_value_usd === 0 && (acc.active_positions_count ?? 0) > 0 && (
                                 <span className="text-[10px] text-muted-foreground ml-1">(시세 로딩 중)</span>
                               )}
@@ -606,7 +652,7 @@ export default function Dashboard({ accountId }: DashboardProps) {
                           <div>
                             <div className="text-[11px] text-muted-foreground mb-0.5">총 손익</div>
                             <div className={`text-sm font-numeric font-semibold ${pl >= 0 ? 'text-profit' : 'text-loss'}`}>
-                              {pl >= 0 ? '+' : ''}{formatCurrency(pl, 'USD')}
+                              {pl >= 0 ? '+' : ''}{formatCurrency(pl, displayCurrency)}
                             </div>
                           </div>
                         </div>
