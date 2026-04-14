@@ -12,9 +12,10 @@ def test_get_name(mock_name):
 
 @patch("app.services.krx_service.stock.get_market_ticker_name")
 def test_get_name_gold(mock_name):
-    mock_name.return_value = "금 99.99_1Kg"
-    krx_service.get_name("GOLD")
-    mock_name.assert_called_once_with("04020000")
+    # 금현물은 pykrx 미사용, 고정 명칭 반환
+    name = krx_service.get_name("GOLD")
+    assert name == "금 현물 (1Kg)"
+    mock_name.assert_not_called()
 
 
 @patch("app.services.krx_service.stock.get_market_ohlcv_by_date")

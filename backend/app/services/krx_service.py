@@ -7,6 +7,7 @@ import logging
 
 from pykrx import stock
 from .market_resolver import to_krx_code
+from .gold_price_service import gold_price_service
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,9 @@ class KRXService:
 
     def get_price(self, ticker: str) -> Optional[float]:
         code = to_krx_code(ticker)
+        # 금현물은 data.go.kr 전용 서비스 사용 (pykrx 미지원)
+        if code == "04020000":
+            return gold_price_service.get_price()
         today = datetime.now().strftime("%Y%m%d")
         start = (datetime.now() - timedelta(days=7)).strftime("%Y%m%d")
         try:
