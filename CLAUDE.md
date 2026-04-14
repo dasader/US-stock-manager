@@ -123,8 +123,17 @@ TZ=Asia/Seoul
 
 ## Key Conventions
 
-- **모든 금액**: USD 기준으로 DB 저장, FX 서비스로 KRW 변환하여 표시
+- **모든 금액**: USD 기준으로 DB 저장, FX 서비스로 KRW 변환하여 표시.
+  단, KRW 계정(`base_currency="KRW"`)의 거래/가격 데이터는 `price_usd` 컬럼명에도 불구하고
+  KRW native 금액을 그대로 저장한다 (컬럼명은 역사적 이유로 유지; 향후 `price_native`로 rename 예정).
+  실제 통화 판별은 항상 `accounts.base_currency`를 참조할 것.
 - **포지션 계산**: DB에 직접 저장하지 않고 항상 PositionEngine으로 동적 계산
 - **가격 캐시**: `PriceCache` 테이블에 캐싱, 만료 시 API 재조회
 - **API 엔드포인트**: trailing slash 필수 (`/api/trades/` O, `/api/trades` X)
 - **Docker 볼륨**: `./data` → `/data` (SQLite DB 영속화)
+
+## Known Technical Debt
+
+- **`price_usd` 컬럼명 불일치**: `Trade.price_usd`, `PriceCache.price_usd` 등의 컬럼은
+  KRW 계정에서 KRW native 금액을 저장한다. 장기적으로 `price_native`로 rename 필요.
+  영향 범위: `models.py`, `crud.py`, `schemas.py`, 관련 API — 20개 파일 138곳.
