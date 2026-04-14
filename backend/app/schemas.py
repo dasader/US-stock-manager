@@ -163,6 +163,11 @@ class DashboardSummary(BaseModel):
     fear_greed_index: Optional['FearGreedIndexResponse'] = None  # Fear & Greed Index
     display_currency: str = "KRW"  # 표시 통화 (USD 또는 KRW)
     total_value_display: float = 0.0  # 통화 인식 총 시장가치 (display_currency 기준)
+    # Native currency breakdown (KRW/USD 계정 분리 합계)
+    total_market_value_native_usd: float = 0.0   # USD 계정의 시장가치 합계 (USD)
+    total_market_value_native_krw: float = 0.0   # KRW 계정의 시장가치 합계 (KRW)
+    total_unrealized_pl_native_usd: float = 0.0  # USD 계정의 미실현손익 (USD)
+    total_unrealized_pl_native_krw: float = 0.0  # KRW 계정의 미실현손익 (KRW)
 
 
 class PriceResponse(BaseModel):

@@ -101,6 +101,10 @@ export interface DashboardSummary {
   fear_greed_index?: FearGreedIndexResponse;
   display_currency?: Currency;
   total_value_display?: number;
+  total_market_value_native_usd?: number;
+  total_market_value_native_krw?: number;
+  total_unrealized_pl_native_usd?: number;
+  total_unrealized_pl_native_krw?: number;
 }
 
 export interface PriceResponse {
