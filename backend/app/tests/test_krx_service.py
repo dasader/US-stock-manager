@@ -29,3 +29,16 @@ def test_get_price(mock_ohlcv):
 def test_get_price_empty_returns_none(mock_ohlcv):
     mock_ohlcv.return_value = pd.DataFrame()
     assert krx_service.get_price("005930") is None
+
+
+@patch("app.services.krx_service.stock.get_market_fundamental_by_date")
+def test_get_dividend_per_share(mock_fund):
+    df = pd.DataFrame({"DPS": [1444.0]}, index=pd.to_datetime(["2026-04-14"]))
+    mock_fund.return_value = df
+    assert krx_service.get_dividend_per_share("005930", 2025) == 1444.0
+
+
+@patch("app.services.krx_service.stock.get_market_fundamental_by_date")
+def test_get_dividend_per_share_zero(mock_fund):
+    mock_fund.return_value = pd.DataFrame()
+    assert krx_service.get_dividend_per_share("005930", 2025) is None
