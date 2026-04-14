@@ -269,23 +269,37 @@ async def _get_account_summary(db: Session, account_id: int, fx_rate: float, fx_
     # 포지션 목록
     positions = engine.get_all_positions(include_closed=False)
     
-    # 가격 데이터 조회 및 집계 (공통 서비스 사용)
+    # 계정 맵 로드 (단일 계정용)
+    accounts_map = {account.id: account}
+
+    # 가격 데이터 조회
     price_data = price_aggregator.get_prices_for_positions(positions)
-    total_market_value_usd, total_unrealized_pl_usd, total_cost_usd = price_aggregator.calculate_position_metrics(positions, price_data)
-    
+
+    # 통화 인식 집계 (USD 기준 정규화)
+    mc_metrics = price_aggregator.calculate_position_metrics_multicurrency(
+        positions, price_data, accounts_map, fx_rate, "USD"
+    )
+
     # 포지션에 가격 정보 적용 (previous_close 포함)
     positions = price_aggregator.apply_prices_to_positions(positions, price_data)
 
-    # 통화 인식 총 시장가치 계산 (단일 계정 — 계정의 base_currency를 사용)
+    # display_currency 기준 총 시장가치
+    mc_display = price_aggregator.calculate_position_metrics_multicurrency(
+        positions, price_data, accounts_map, fx_rate, display_currency
+    )
+    total_value_display = mc_display["total_market_value"]
+
+    # USD 기준 집계값 (기존 변수명 유지)
     account_base_currency = getattr(account, "base_currency", "USD")
-    if account_base_currency == display_currency:
-        total_value_display = total_market_value_usd
-    elif account_base_currency == "USD" and display_currency == "KRW":
-        total_value_display = total_market_value_usd * fx_rate
-    elif account_base_currency == "KRW" and display_currency == "USD":
-        total_value_display = total_market_value_usd / fx_rate if fx_rate > 0 else 0.0
-    else:
-        total_value_display = total_market_value_usd
+    total_market_value_usd = (
+        mc_metrics["native_usd_market_value"]
+        + mc_metrics["native_krw_market_value"] / fx_rate
+    )
+    total_unrealized_pl_usd = (
+        mc_metrics["native_usd_unrealized_pl"]
+        + mc_metrics["native_krw_unrealized_pl"] / fx_rate
+    )
+    total_cost_usd = mc_metrics["total_cost"]
 
     # 각 포지션에 전일 대비 변화량 계산
     # 동일한 스냅샷 날짜를 기준으로 계산하기 위해 앵커 스냅샷 날짜를 먼저 결정 (계정 요약)
@@ -435,6 +449,10 @@ async def _get_account_summary(db: Session, account_id: int, fx_rate: float, fx_
         fear_greed_index=fear_greed_index_schema,
         display_currency=display_currency,
         total_value_display=total_value_display,
+        total_market_value_native_usd=mc_metrics["native_usd_market_value"],
+        total_market_value_native_krw=mc_metrics["native_krw_market_value"],
+        total_unrealized_pl_native_usd=mc_metrics["native_usd_unrealized_pl"],
+        total_unrealized_pl_native_krw=mc_metrics["native_krw_unrealized_pl"],
     )
 
 
