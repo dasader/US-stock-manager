@@ -113,6 +113,7 @@ class Position(BaseModel):
     day_change_pl_percent: Optional[float] = None  # 전일 대비 손익 변화율 (%)
     previous_close_price: Optional[float] = None  # 전일 종가 (Finnhub Quote API)
     realized_pl_usd: Optional[float] = None  # 실현 손익
+    currency: str = "USD"  # 계정 기준 통화 (USD 또는 KRW)
 
 
 class RealizedPLResponse(BaseModel):
