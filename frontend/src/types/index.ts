@@ -1,8 +1,11 @@
+export type Currency = "USD" | "KRW";
+
 export interface Account {
   id: number;
   name: string;
   description?: string;
   is_active: boolean;
+  base_currency?: Currency;
   created_at: string;
   updated_at?: string;
 }
@@ -38,6 +41,7 @@ export interface Position {
   day_change_pl_percent?: number;
   previous_close_price?: number;
   realized_pl_usd?: number;
+  currency?: Currency;
 }
 
 export interface RealizedPL {
@@ -95,6 +99,8 @@ export interface DashboardSummary {
   total_dividends_krw?: number;
   net_investment_usd?: number;
   fear_greed_index?: FearGreedIndexResponse;
+  display_currency?: Currency;
+  total_value_display?: number;
 }
 
 export interface PriceResponse {
