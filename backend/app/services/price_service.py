@@ -153,7 +153,7 @@ class PriceService:
             "as_of": now,
             "timestamp": now,
         }
-        print(f"[KRX] {ticker}: ₩{price:,.0f}")
+        print(f"[KRX] {ticker}: KRW {price:,.0f}")
         return result
 
     def get_multiple_prices(self, tickers: list) -> Dict[str, Optional[Dict]]:

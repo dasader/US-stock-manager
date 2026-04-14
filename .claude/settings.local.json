@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd:*)",
+      "Bash(npm run:*)",
+      "Bash(cmd.exe:*)",
+      "Bash(cmd:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "mcp__claude_ai_Notion__notion-search",
+      "mcp__claude_ai_Notion__notion-fetch",
+      "mcp__claude_ai_Notion__notion-create-pages",
+      "WebFetch(domain:prod-files-secure.s3.us-west-2.amazonaws.com)",
+      "WebFetch(domain:kr.freepik.com)",
+      "mcp__claude_ai_Notion__notion-update-page",
+      "Bash(do wc:*)",
+      "Bash(docker compose:*)",
+      "Bash(curl:*)",
+      "Bash(where npm)",
+      "Read(//c/Users/ilhwa/**)"
+    ]
+  }
+}
