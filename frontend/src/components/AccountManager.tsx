@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { accountsApi } from '../services/api';
 import { Account } from '../types';
+import type { Currency } from '../types';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Plus, Edit2, Trash2, Check, X } from 'lucide-react';
+import { CurrencyBadge } from './accounts/CurrencyBadge';
 
 export default function AccountManager() {
   const queryClient = useQueryClient();
@@ -16,6 +18,7 @@ export default function AccountManager() {
     name: '',
     description: '',
     is_active: true,
+    base_currency: 'USD' as Currency,
   });
 
   // 계정 목록 조회
@@ -81,6 +84,7 @@ export default function AccountManager() {
       name: '',
       description: '',
       is_active: true,
+      base_currency: 'USD',
     });
   };
 
@@ -101,20 +105,21 @@ export default function AccountManager() {
         return;
       }
       
-      updateMutation.mutate({ id: editingId, data: updateData });
+      updateMutation.mutate({ id: editingId, data: { ...updateData, base_currency: formData.base_currency } });
     } else {
       // 생성 시: 빈 문자열 체크
       if (!formData.name.trim()) {
         alert('계정명은 필수입니다.');
         return;
       }
-      
+
       const createData = {
         name: formData.name.trim(),
         description: formData.description?.trim() || '',
         is_active: formData.is_active,
+        base_currency: formData.base_currency,
       };
-      
+
       createMutation.mutate(createData);
     }
   };
@@ -125,6 +130,7 @@ export default function AccountManager() {
       name: account.name,
       description: account.description || '',
       is_active: account.is_active,
+      base_currency: account.base_currency ?? 'USD',
     });
     setIsCreating(true);
   };
@@ -201,6 +207,19 @@ export default function AccountManager() {
               />
             </div>
 
+            <div>
+              <Label htmlFor="base_currency">기준 통화</Label>
+              <select
+                id="base_currency"
+                value={formData.base_currency}
+                onChange={(e) => setFormData({ ...formData, base_currency: e.target.value as Currency })}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="USD">USD (미국)</option>
+                <option value="KRW">KRW (한국)</option>
+              </select>
+            </div>
+
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -235,6 +254,7 @@ export default function AccountManager() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold text-lg">{account.name}</h3>
+                    <CurrencyBadge currency={account.base_currency ?? 'USD'} />
                     {account.id === 1 && (
                       <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded">
                         기본
