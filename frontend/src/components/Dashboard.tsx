@@ -17,6 +17,9 @@ import {
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useToast } from '@/hooks/useToast';
 import PortfolioChart from './PortfolioChart';
+import { useDisplayCurrency } from '../hooks/useDisplayCurrency';
+import { DisplayCurrencyToggle } from './dashboard/DisplayCurrencyToggle';
+import { CurrencyBadge } from './accounts/CurrencyBadge';
 
 interface LoadingStatus {
   total: number;
@@ -37,14 +40,16 @@ export default function Dashboard({ accountId }: DashboardProps) {
   const [loadingStatus, setLoadingStatus] = useState<LoadingStatus | null>(null);
   const [showProgress, setShowProgress] = useState(false);
   const { toast } = useToast();
+  const [displayCurrency, setDisplayCurrency] = useDisplayCurrency();
 
   const { data: summary, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['dashboard-summary', accountId],
+    queryKey: ['dashboard-summary', accountId, displayCurrency],
     queryFn: () =>
       dashboardApi
         .getSummary({
           account_id: accountId || undefined,
           include_account_summaries: accountId === null,
+          display_currency: displayCurrency,
         })
         .then((res) => res.data),
     refetchInterval: 60000,
@@ -166,6 +171,7 @@ export default function Dashboard({ accountId }: DashboardProps) {
           대시보드{accountId !== null && ' — 계정별 보기'}
         </h2>
         <div className="flex items-center gap-2">
+          <DisplayCurrencyToggle value={displayCurrency} onChange={setDisplayCurrency} />
           <Button onClick={handleForceRefresh} variant="outline" size="sm" className="hover-lift">
             <RefreshCw className="h-4 w-4 mr-2" />
             새로고침
@@ -287,10 +293,12 @@ export default function Dashboard({ accountId }: DashboardProps) {
           </CardHeader>
           <CardContent className="relative z-10 space-y-1">
             <div className="text-2xl font-bold font-numeric tracking-tight text-blue-700 dark:text-blue-400">
-              {formatCurrency(summary.total_market_value_usd ?? 0, 'USD')}
+              {formatCurrency(summary.total_value_display ?? summary.total_market_value_usd ?? 0, displayCurrency)}
             </div>
             <div className="text-xs text-muted-foreground font-numeric">
-              {formatCurrency(summary.total_market_value_krw ?? 0, 'KRW')}
+              {displayCurrency === 'KRW'
+                ? formatCurrency(summary.total_market_value_usd ?? 0, 'USD')
+                : formatCurrency(summary.total_market_value_krw ?? 0, 'KRW')}
             </div>
             <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
               <span className="font-numeric font-medium">{summary.active_positions_count ?? 0}개</span>
@@ -528,7 +536,11 @@ export default function Dashboard({ accountId }: DashboardProps) {
                     <tbody>
                       {summary.accounts_summary.map((acc) => (
                         <tr key={`acc-${acc.account_id}`} className="border-b border-border/50 hover:bg-muted/40">
-                          <td className="px-3 py-1.5 font-medium min-w-0 max-w-[120px] truncate">{acc.account_name ?? '—'}</td>
+                          <td className="px-3 py-1.5 font-medium min-w-0 max-w-[140px]">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="truncate">{acc.account_name ?? '—'}</span>
+                            </div>
+                          </td>
                           <td className="text-right px-2 py-1.5 font-numeric whitespace-nowrap">{formatCurrency(acc.total_market_value_usd, 'USD')}</td>
                           <td className={`text-right px-3 py-1.5 font-numeric font-semibold whitespace-nowrap ${(acc.total_pl_usd ?? 0) >= 0 ? 'text-profit' : 'text-loss'}`}>
                             {(acc.total_pl_usd ?? 0) >= 0 ? '+' : ''}{formatCurrency(acc.total_pl_usd, 'USD')}
@@ -545,7 +557,10 @@ export default function Dashboard({ accountId }: DashboardProps) {
                     const pl = acc.total_pl_usd ?? 0;
                     return (
                       <div key={`acc-card-${acc.account_id}`} className="rounded-lg border border-border bg-card p-3">
-                        <div className="text-sm font-semibold mb-2 truncate">{acc.account_name ?? '—'}</div>
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <span className="text-sm font-semibold truncate">{acc.account_name ?? '—'}</span>
+                          <CurrencyBadge currency="USD" />
+                        </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
                             <div className="text-[11px] text-muted-foreground mb-0.5">평가금액</div>

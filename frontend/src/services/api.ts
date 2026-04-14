@@ -204,7 +204,7 @@ export const fxApi = {
 
 // Dashboard
 export const dashboardApi = {
-  getSummary: (params?: { account_id?: number; include_account_summaries?: boolean }) =>
+  getSummary: (params?: { account_id?: number; include_account_summaries?: boolean; display_currency?: string }) =>
     api.get<DashboardSummary>('/dashboard/summary', { params }),
 };
 
