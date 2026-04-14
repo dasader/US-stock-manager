@@ -161,6 +161,8 @@ class DashboardSummary(BaseModel):
     total_dividends_usd: Optional[float] = None  # 총 배당금 (USD)
     total_dividends_krw: Optional[float] = None  # 총 배당금 (KRW)
     fear_greed_index: Optional['FearGreedIndexResponse'] = None  # Fear & Greed Index
+    display_currency: str = "KRW"  # 표시 통화 (USD 또는 KRW)
+    total_value_display: float = 0.0  # 통화 인식 총 시장가치 (display_currency 기준)
 
 
 class PriceResponse(BaseModel):

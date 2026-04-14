@@ -2,7 +2,7 @@
 대시보드 관련 API 엔드포인트
 """
 import logging
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import Optional, Dict
 from datetime import date, timedelta
@@ -24,6 +24,7 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 async def get_dashboard_summary(
     account_id: Optional[int] = None,
     include_account_summaries: bool = False,
+    display_currency: str = Query("KRW", pattern="^(USD|KRW)$"),
     db: Session = Depends(get_db)
 ):
     """대시보드 요약 정보 (전체 또는 특정 계정)"""
@@ -37,7 +38,7 @@ async def get_dashboard_summary(
     
     # 특정 계정만 조회하는 경우
     if account_id:
-        return await _get_account_summary(db, account_id, fx_rate, fx_as_of, fear_greed_data)
+        return await _get_account_summary(db, account_id, fx_rate, fx_as_of, fear_greed_data, display_currency)
     
     # 전체 계정 조회
     trades = crud.get_all_trades_for_calculation(db)
@@ -59,7 +60,16 @@ async def get_dashboard_summary(
     
     # 포지션에 가격 정보 적용 (previous_close 포함)
     positions = price_aggregator.apply_prices_to_positions(positions, price_data)
-    
+
+    # 통화 인식 총 시장가치 계산 (display_currency 기준)
+    # 주의: PositionEngine.get_all_positions()는 account_id를 반환하지 않으므로
+    # 혼합통화 포트폴리오에서는 정확한 per-position 환산이 불가능합니다.
+    # 전체 요약에서는 total_market_value_usd(USD 기준 집계)를 display_currency로 환산합니다.
+    if display_currency == "KRW":
+        total_value_display = total_market_value_usd * fx_rate
+    else:
+        total_value_display = total_market_value_usd
+
     # 각 포지션에 전일 대비 변화량 계산
     # 동일한 스냅샷 날짜를 기준으로 계산하기 위해 앵커 스냅샷 날짜를 먼저 결정 (전체 요약)
     anchor_summary_snapshot = crud.get_latest_snapshot(db, account_id=None, ticker=None)
@@ -218,11 +228,13 @@ async def get_dashboard_summary(
         day_change_pl_usd=day_change_pl_usd,
         total_dividends_usd=total_dividends_usd,
         total_dividends_krw=total_dividends_usd * fx_rate,
-        fear_greed_index=fear_greed_index_schema
+        fear_greed_index=fear_greed_index_schema,
+        display_currency=display_currency,
+        total_value_display=total_value_display,
     )
 
 
-async def _get_account_summary(db: Session, account_id: int, fx_rate: float, fx_as_of, fear_greed_data: Optional[Dict] = None):
+async def _get_account_summary(db: Session, account_id: int, fx_rate: float, fx_as_of, fear_greed_data: Optional[Dict] = None, display_currency: str = "KRW"):
     """특정 계정의 요약 정보"""
     # 계정 조회
     account = crud.get_account(db, account_id)
@@ -246,7 +258,18 @@ async def _get_account_summary(db: Session, account_id: int, fx_rate: float, fx_
     
     # 포지션에 가격 정보 적용 (previous_close 포함)
     positions = price_aggregator.apply_prices_to_positions(positions, price_data)
-    
+
+    # 통화 인식 총 시장가치 계산 (단일 계정 — 계정의 base_currency를 사용)
+    account_base_currency = getattr(account, "base_currency", "USD")
+    if account_base_currency == display_currency:
+        total_value_display = total_market_value_usd
+    elif account_base_currency == "USD" and display_currency == "KRW":
+        total_value_display = total_market_value_usd * fx_rate
+    elif account_base_currency == "KRW" and display_currency == "USD":
+        total_value_display = total_market_value_usd / fx_rate if fx_rate > 0 else 0.0
+    else:
+        total_value_display = total_market_value_usd
+
     # 각 포지션에 전일 대비 변화량 계산
     # 동일한 스냅샷 날짜를 기준으로 계산하기 위해 앵커 스냅샷 날짜를 먼저 결정 (계정 요약)
     anchor_summary_snapshot = crud.get_latest_snapshot(db, account_id=account_id, ticker=None)
@@ -257,9 +280,9 @@ async def _get_account_summary(db: Session, account_id: int, fx_rate: float, fx_
         current_price = position.get('market_price_usd')
         shares = position.get('shares', 0)
         avg_cost = position.get('avg_cost_usd', 0)
-        
+
         day_change = None
-        
+
         # 스냅샷 조회 (요약 스냅샷의 날짜를 앵커로 사용하여 동일한 날짜 스냅샷만 사용)
         yesterday_snapshot = None
         if anchor_summary_snapshot is not None:
@@ -269,7 +292,7 @@ async def _get_account_summary(db: Session, account_id: int, fx_rate: float, fx_
                 account_id=account_id,
                 ticker=ticker
             )
-        
+
         # 방법 1: 스냅샷 기반 (우선순위 높음, unrealized_pl_usd가 있어야 함)
         if yesterday_snapshot and yesterday_snapshot.unrealized_pl_usd is not None and current_unrealized_pl is not None:
             day_change = current_unrealized_pl - yesterday_snapshot.unrealized_pl_usd
@@ -392,7 +415,9 @@ async def _get_account_summary(db: Session, account_id: int, fx_rate: float, fx_
         day_change_pl_usd=day_change_pl_usd,
         total_dividends_usd=total_dividends_usd,
         total_dividends_krw=total_dividends_usd * fx_rate,
-        fear_greed_index=fear_greed_index_schema
+        fear_greed_index=fear_greed_index_schema,
+        display_currency=display_currency,
+        total_value_display=total_value_display,
     )
 
 
