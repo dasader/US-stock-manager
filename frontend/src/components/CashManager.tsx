@@ -262,7 +262,7 @@ export default function CashManager({ accountId }: CashManagerProps) {
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="amount_usd">금액 (USD)</Label>
+                  <Label htmlFor="amount_usd">금액 ({form.account_id ? getAccountCurrency(typeof form.account_id === 'string' ? parseInt(form.account_id) : form.account_id) : 'USD'})</Label>
                   <Input
                     id="amount_usd"
                     type="number"

@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { formatCurrency, formatNumber, cn } from '@/lib/utils';
 import { useToast } from '@/hooks/useToast';
 import CsvManagementModal from './CsvManagementModal';
-import type { Trade, Account } from '@/types';
+import type { Trade, Account, Currency } from '@/types';
 import {
   Plus,
   X,
@@ -175,6 +175,15 @@ export default function Trades({ accountId }: TradesProps) {
   const getAccountName = useCallback(
     (id: number) => allAccounts?.find((a: Account) => a.id === id)?.name || `#${id}`,
     [allAccounts],
+  );
+
+  const getCur = useCallback(
+    (accountId: number): Currency => {
+      const allAccountsList = accounts ?? allAccounts ?? [];
+      const a = allAccountsList.find((x: Account) => x.id === accountId);
+      return (a?.base_currency ?? 'USD') as Currency;
+    },
+    [accounts, allAccounts],
   );
 
   const paginatedTrades = useMemo(() => {
@@ -503,13 +512,13 @@ export default function Trades({ accountId }: TradesProps) {
                           <div className="flex-1 min-w-0">
                             <span className="text-sm font-numeric text-muted-foreground">
                               {formatNumber(trade.shares, trade.shares % 1 === 0 ? 0 : 4)} x{' '}
-                              {formatCurrency(trade.price_usd)}
+                              {formatCurrency(trade.price_usd, getCur(trade.account_id))}
                             </span>
                           </div>
 
                           {/* Total amount */}
                           <span className="text-sm font-semibold font-numeric text-foreground shrink-0">
-                            {formatCurrency(trade.shares * trade.price_usd)}
+                            {formatCurrency(trade.shares * trade.price_usd, getCur(trade.account_id))}
                           </span>
 
                           {/* Note indicator */}

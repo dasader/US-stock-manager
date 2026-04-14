@@ -123,22 +123,56 @@ export default function Dashboard({ accountId }: DashboardProps) {
       .reduce((sum, p) => sum + (p.market_value_usd ?? 0), 0);
   }, [positions]);
 
+  const unrealizedPL = summary?.total_unrealized_pl_usd ?? 0;
+  const realizedPL = summary?.total_realized_pl_usd ?? 0;
+  const totalPL = summary?.total_pl_usd ?? 0;
+  const dayChange = summary?.day_change_pl_usd;
+  const netInvestment = summary?.net_investment_usd ?? 0;
+  const totalAssets = netInvestment + realizedPL + unrealizedPL;
+  const netInvestmentWidth = totalAssets > 0 ? (Math.abs(netInvestment) / totalAssets) * 100 : 0;
+  const realizedPLWidth = totalAssets > 0 ? (Math.abs(realizedPL) / totalAssets) * 100 : 0;
+  const unrealizedPLWidth = totalAssets > 0 ? (Math.abs(unrealizedPL) / totalAssets) * 100 : 0;
+
+  // 헤더: 항상 표시 (통화 토글이 데이터 로딩 전에도 보여야 함)
+  const headerRow = (
+    <div className="flex items-center justify-between">
+      <h2 className="text-2xl font-bold tracking-tight">
+        대시보드{accountId !== null && ' — 계정별 보기'}
+      </h2>
+      <div className="flex items-center gap-2">
+        <DisplayCurrencyToggle value={displayCurrency} onChange={setDisplayCurrency} />
+        <Button onClick={handleForceRefresh} variant="outline" size="sm" className="hover-lift">
+          <RefreshCw className="h-4 w-4 mr-2" />
+          새로고침
+        </Button>
+      </div>
+    </div>
+  );
+
   if (isLoading && !summary) {
-    return <DashboardSkeleton />;
+    return (
+      <div className="space-y-5">
+        {headerRow}
+        <DashboardSkeleton />
+      </div>
+    );
   }
 
   if (isError) {
     return (
-      <div className="flex flex-col items-center justify-center p-8 space-y-4">
-        <div className="text-red-600 text-center">
-          <h3 className="text-lg font-semibold mb-2">데이터를 불러올 수 없습니다</h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            {error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다'}
-          </p>
-          <Button onClick={() => refetch()} variant="outline">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            다시 시도
-          </Button>
+      <div className="space-y-5">
+        {headerRow}
+        <div className="flex flex-col items-center justify-center p-8 space-y-4">
+          <div className="text-red-600 text-center">
+            <h3 className="text-lg font-semibold mb-2">데이터를 불러올 수 없습니다</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              {error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다'}
+            </p>
+            <Button onClick={() => refetch()} variant="outline">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              다시 시도
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -146,22 +180,15 @@ export default function Dashboard({ accountId }: DashboardProps) {
 
   if (!summary) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-        <span className="ml-3 text-muted-foreground">데이터 로딩 중...</span>
+      <div className="space-y-5">
+        {headerRow}
+        <div className="flex items-center justify-center p-8">
+          <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+          <span className="ml-3 text-muted-foreground">데이터 로딩 중...</span>
+        </div>
       </div>
     );
   }
-
-  const unrealizedPL = summary.total_unrealized_pl_usd ?? 0;
-  const realizedPL = summary.total_realized_pl_usd ?? 0;
-  const totalPL = summary.total_pl_usd ?? 0;
-  const dayChange = summary.day_change_pl_usd;
-  const netInvestment = summary.net_investment_usd ?? 0;
-  const totalAssets = netInvestment + realizedPL + unrealizedPL;
-  const netInvestmentWidth = totalAssets > 0 ? (Math.abs(netInvestment) / totalAssets) * 100 : 0;
-  const realizedPLWidth = totalAssets > 0 ? (Math.abs(realizedPL) / totalAssets) * 100 : 0;
-  const unrealizedPLWidth = totalAssets > 0 ? (Math.abs(unrealizedPL) / totalAssets) * 100 : 0;
 
   return (
     <div className="space-y-5">
@@ -541,7 +568,12 @@ export default function Dashboard({ accountId }: DashboardProps) {
                               <span className="truncate">{acc.account_name ?? '—'}</span>
                             </div>
                           </td>
-                          <td className="text-right px-2 py-1.5 font-numeric whitespace-nowrap">{formatCurrency(acc.total_market_value_usd, 'USD')}</td>
+                          <td className="text-right px-2 py-1.5 font-numeric whitespace-nowrap">
+                            {formatCurrency(acc.total_market_value_usd, 'USD')}
+                            {acc.total_market_value_usd === 0 && (acc.active_positions_count ?? 0) > 0 && (
+                              <span className="block text-[10px] text-muted-foreground">(시세 로딩 중)</span>
+                            )}
+                          </td>
                           <td className={`text-right px-3 py-1.5 font-numeric font-semibold whitespace-nowrap ${(acc.total_pl_usd ?? 0) >= 0 ? 'text-profit' : 'text-loss'}`}>
                             {(acc.total_pl_usd ?? 0) >= 0 ? '+' : ''}{formatCurrency(acc.total_pl_usd, 'USD')}
                           </td>
@@ -564,7 +596,12 @@ export default function Dashboard({ accountId }: DashboardProps) {
                         <div className="grid grid-cols-2 gap-2">
                           <div>
                             <div className="text-[11px] text-muted-foreground mb-0.5">평가금액</div>
-                            <div className="text-sm font-numeric font-medium">{formatCurrency(acc.total_market_value_usd, 'USD')}</div>
+                            <div className="text-sm font-numeric font-medium">
+                              {formatCurrency(acc.total_market_value_usd, 'USD')}
+                              {acc.total_market_value_usd === 0 && (acc.active_positions_count ?? 0) > 0 && (
+                                <span className="text-[10px] text-muted-foreground ml-1">(시세 로딩 중)</span>
+                              )}
+                            </div>
                           </div>
                           <div>
                             <div className="text-[11px] text-muted-foreground mb-0.5">총 손익</div>

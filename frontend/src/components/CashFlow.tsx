@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { cashApi, dividendsApi, accountsApi, tradesApi } from '@/services/api';
+import { cashApi, dividendsApi, accountsApi, tradesApi, fxApi } from '@/services/api';
+import { useDisplayCurrency } from '../hooks/useDisplayCurrency';
 import { Card, CardContent, CardHeader, CardTitle, GlassCard } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -95,6 +96,22 @@ export default function CashFlow({ accountId }: CashFlowProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const chartTheme = useChartTheme();
+  const [displayCurrency] = useDisplayCurrency();
+
+  // FX rate for currency conversion
+  const { data: fx } = useQuery({
+    queryKey: ['fx-rate', 'USD', 'KRW'],
+    queryFn: () => fxApi.getUSDKRW(),
+    staleTime: 60_000,
+  });
+  const fxUsdKrw = fx?.data?.rate ?? 1350;
+
+  const toDisplay = (amount: number, cur: Currency): number => {
+    if (cur === displayCurrency) return amount;
+    if (cur === 'USD' && displayCurrency === 'KRW') return amount * fxUsdKrw;
+    if (cur === 'KRW' && displayCurrency === 'USD') return fxUsdKrw > 0 ? amount / fxUsdKrw : 0;
+    return amount;
+  };
 
   // --- State ---
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
@@ -288,10 +305,12 @@ export default function CashFlow({ accountId }: CashFlowProps) {
       for (const c of cashTransactions) {
         const mk = getMonthKey(c.transaction_date);
         if (!map[mk]) continue;
+        const cur = getAccountCurrency(c.account_id);
+        const amount = toDisplay(c.amount_usd, cur);
         if (c.transaction_type === 'DEPOSIT' || c.transaction_type === 'SELL') {
-          map[mk].deposits += c.amount_usd;
+          map[mk].deposits += amount;
         } else if (c.transaction_type === 'WITHDRAW' || c.transaction_type === 'BUY') {
-          map[mk].withdrawals += c.amount_usd;
+          map[mk].withdrawals += amount;
         }
         // Cash DIVIDEND type is already counted via dividends query
       }
@@ -301,7 +320,8 @@ export default function CashFlow({ accountId }: CashFlowProps) {
       for (const d of dividends) {
         const mk = getMonthKey(d.dividend_date);
         if (map[mk]) {
-          map[mk].dividends += d.amount_usd;
+          const cur = getAccountCurrency(d.account_id);
+          map[mk].dividends += toDisplay(d.amount_usd, cur);
         }
       }
     }
@@ -310,7 +330,7 @@ export default function CashFlow({ accountId }: CashFlowProps) {
       ...map[m],
       withdrawals: -map[m].withdrawals, // negative for chart display
     }));
-  }, [cashTransactions, dividends]);
+  }, [cashTransactions, dividends, displayCurrency, fxUsdKrw, accounts]);
 
   // --- KPI values ---
   const totalCash = cashSummary?.total_cash_usd ?? 0;
@@ -591,7 +611,7 @@ export default function CashFlow({ accountId }: CashFlowProps) {
                 </select>
               </div>
               <div className="space-y-1.5">
-                <Label>금액 (USD)</Label>
+                <Label>금액 ({cashForm.account_id ? getAccountCurrency(typeof cashForm.account_id === 'string' ? parseInt(cashForm.account_id) : cashForm.account_id) : 'USD'})</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -943,7 +963,13 @@ export default function CashFlow({ accountId }: CashFlowProps) {
                   tick={{ fontSize: 11, fill: chartTheme.muted }}
                   axisLine={false}
                   tickLine={false}
-                  tickFormatter={(v: number) => `$${Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`}
+                  tickFormatter={(v: number) => {
+                    const abs = Math.abs(v);
+                    if (displayCurrency === 'KRW') {
+                      return abs >= 1_000_000 ? `₩${(v / 1_000_000).toFixed(0)}M` : abs >= 1000 ? `₩${(v / 1000).toFixed(0)}K` : `₩${v}`;
+                    }
+                    return abs >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`;
+                  }}
                 />
                 <Tooltip
                   contentStyle={{
@@ -959,7 +985,7 @@ export default function CashFlow({ accountId }: CashFlowProps) {
                       dividends: '배당',
                       withdrawals: '출금/매수',
                     };
-                    return [formatCurrency(Math.abs(value), 'USD'), labels[name] || name];
+                    return [formatCurrency(Math.abs(value), displayCurrency), labels[name] || name];
                   }}
                 />
                 <ReferenceLine y={0} stroke={chartTheme.grid} />
