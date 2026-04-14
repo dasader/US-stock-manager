@@ -7,6 +7,16 @@ from contextlib import asynccontextmanager
 import os
 import logging
 import sys
+from pathlib import Path
+
+# .env 로딩 (로컬 개발 시 필수; Docker는 env_file로 주입)
+try:
+    from dotenv import load_dotenv
+    _env_path = Path(__file__).resolve().parents[2] / ".env"
+    if _env_path.exists():
+        load_dotenv(_env_path)
+except ImportError:
+    pass
 
 # 로깅 설정
 logging.basicConfig(
