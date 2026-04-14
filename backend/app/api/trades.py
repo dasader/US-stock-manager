@@ -20,6 +20,7 @@ from ..core.exceptions import (
     external_service_exception
 )
 from ..services.position_engine import PositionEngine
+from ..services.market_resolver import validate_ticker_against_account
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/trades", tags=["trades"])
@@ -53,7 +54,13 @@ def create_trade(trade: schemas.TradeCreate, db: Session = Depends(get_db)):
         
         if not account.is_active:
             raise validation_exception(f"계정 '{account.name}'이 비활성화되어 있습니다.")
-        
+
+        # 티커·계정통화 정합성 검증
+        try:
+            validate_ticker_against_account(trade.ticker, account.base_currency)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
         # 거래/현금을 하나의 트랜잭션으로 처리
         db_trade = crud.create_trade(db, trade, commit=False)
         
@@ -199,11 +206,21 @@ def update_trade(trade_id: int, trade_update: schemas.TradeUpdate, db: Session =
         account = crud.get_account(db, trade_update.account_id)
         if not account:
             raise HTTPException(status_code=404, detail=f"계정 ID {trade_update.account_id}를 찾을 수 없습니다.")
-    
+
     # 기존 거래 정보 조회 (현금 데이터 갱신을 위해)
     existing_trade = crud.get_trade(db, trade_id)
     if not existing_trade:
         raise HTTPException(status_code=404, detail="거래를 찾을 수 없습니다.")
+
+    # 티커·계정통화 정합성 검증 (변경 여부와 무관하게 유효 값으로 검증)
+    effective_ticker = trade_update.ticker if trade_update.ticker is not None else existing_trade.ticker
+    effective_account_id = trade_update.account_id if trade_update.account_id is not None else existing_trade.account_id
+    effective_account = crud.get_account(db, effective_account_id)
+    if effective_account:
+        try:
+            validate_ticker_against_account(effective_ticker, effective_account.base_currency)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
     
     # 거래/현금을 하나의 트랜잭션으로 처리
     trade = crud.update_trade(db, trade_id, trade_update, commit=False)
