@@ -544,23 +544,43 @@ async def _get_account_summary_data(db: Session, account_id: int, account_name: 
             day_change_pl_usd = total_position_day_change
             logger.debug(f"[ACCOUNT_SUMMARY] Account {account_id} Total P&L day_change: POSITIONS SUM (미실현만) = ${day_change_pl_usd:.2f}")
     
+    # 계정 통화 인식: base_currency == 'KRW'면 위 native 값들은 KRW. USD면 USD.
+    # _usd / _krw 필드 양쪽을 정확한 환산값으로 채움.
+    account_obj = crud.get_account(db, account_id)
+    base_cur = getattr(account_obj, 'base_currency', 'USD') or 'USD'
+    rate = fx_rate if fx_rate and fx_rate > 0 else 1.0
+
+    def _to_pair(native: float) -> tuple[float, float]:
+        """native 금액을 (usd, krw) 쌍으로 환산. base_cur 기준."""
+        if base_cur == 'KRW':
+            return (native / rate, native)
+        return (native, native * rate)
+
+    mv_usd, mv_krw = _to_pair(total_market_value_usd)
+    upl_usd, upl_krw = _to_pair(total_unrealized_pl_usd)
+    rpl_usd, rpl_krw = _to_pair(total_realized_pl_usd)
+    tpl_usd, tpl_krw = _to_pair(total_pl_usd)
+    cash_usd, cash_krw = _to_pair(total_cash_usd)
+    # cost는 프론트에서 사용 빈도 낮아 USD 환산본만 필드 유지
+    cost_usd = total_cost_usd / rate if base_cur == 'KRW' else total_cost_usd
+
     return schemas.AccountSummary(
         account_id=account_id,
         account_name=account_name,
-        total_market_value_usd=total_market_value_usd,
-        total_market_value_krw=total_market_value_usd * fx_rate,
-        total_unrealized_pl_usd=total_unrealized_pl_usd,
-        total_unrealized_pl_krw=total_unrealized_pl_usd * fx_rate,
+        total_market_value_usd=mv_usd,
+        total_market_value_krw=mv_krw,
+        total_unrealized_pl_usd=upl_usd,
+        total_unrealized_pl_krw=upl_krw,
         total_unrealized_pl_percent=total_unrealized_pl_percent,
-        total_realized_pl_usd=total_realized_pl_usd,
-        total_realized_pl_krw=total_realized_pl_usd * fx_rate,
-        total_pl_usd=total_pl_usd,
-        total_pl_krw=total_pl_usd * fx_rate,
-        total_cost_usd=total_cost_usd,
-        total_cash_usd=total_cash_usd,
-        total_cash_krw=total_cash_usd * fx_rate,
+        total_realized_pl_usd=rpl_usd,
+        total_realized_pl_krw=rpl_krw,
+        total_pl_usd=tpl_usd,
+        total_pl_krw=tpl_krw,
+        total_cost_usd=cost_usd,
+        total_cash_usd=cash_usd,
+        total_cash_krw=cash_krw,
         positions_count=len(positions),
         active_positions_count=active_positions_count,
-        day_change_pl_usd=day_change_pl_usd
+        day_change_pl_usd=day_change_pl_usd if base_cur == 'USD' else (day_change_pl_usd / rate if day_change_pl_usd is not None else None)
     )
 
