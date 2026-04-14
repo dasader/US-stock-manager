@@ -13,13 +13,14 @@ from ..database import get_db
 from ..services.position_engine import PositionEngine
 from ..services.price_aggregator import price_aggregator
 from ..services.stock_info_service import stock_info_service
+from ..services.fx_service import fx_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
 
 
 @router.get("/portfolio/", response_model=schemas.PortfolioAnalysis)
-def analyze_portfolio(
+async def analyze_portfolio(
     account_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
@@ -30,6 +31,10 @@ def analyze_portfolio(
     - 집중도 분석
     - 다양성 점수
     """
+    # 환율 조회 (KRW 계정 포지션 환산용)
+    fx_data = await fx_service.get_rate("USD", "KRW")
+    fx_rate = fx_data['rate'] if fx_data else 1350.0
+
     # 1. 포지션 조회
     trades = crud.get_all_trades_for_calculation(db, account_id)
     engine = PositionEngine()
@@ -48,7 +53,11 @@ def analyze_portfolio(
             position['account_id'] = matching_trade['account_id']
         else:
             position['account_id'] = account_id or 0
-    
+
+    # 계정 맵 로드 (포지션별 base_currency 판별용)
+    accounts_list = crud.get_accounts(db)
+    accounts_map = {a.id: a for a in accounts_list}
+
     # 2. DB에서 배당 데이터 조회 (yfinance 호출 없이)
     current_year = date.today().year
     # 모든 포지션의 티커 목록 수집
@@ -93,13 +102,22 @@ def analyze_portfolio(
     total_market_value_usd = 0.0
     total_unrealized_pl_usd = 0.0
     
-    # TODO[multi-currency-pl]: 아래 루프는 포지션의 market_value_usd / unrealized_pl_usd를
-    # 계정 base_currency 구분 없이 합산. KRW 포지션(예: GOLD)이 USD로 취급되어
-    # 섹터 비중·수익 기여도·합계가 왜곡됨. 상세: /docs/pl_todo.md
     for position in positions:
         ticker = position['ticker']
-        market_value = position.get('market_value_usd', 0) or 0
-        unrealized_pl = position.get('unrealized_pl_usd', 0) or 0
+        account_id_pos = position.get('account_id')
+        account = accounts_map.get(account_id_pos) if account_id_pos else None
+        base_currency = getattr(account, 'base_currency', 'USD') if account else 'USD'
+
+        raw_market_value = position.get('market_value_usd', 0) or 0
+        raw_unrealized_pl = position.get('unrealized_pl_usd', 0) or 0
+
+        # KRW 계정은 native 금액(KRW)을 USD로 환산
+        if base_currency == 'KRW':
+            market_value = raw_market_value / fx_rate if fx_rate else 0.0
+            unrealized_pl = raw_unrealized_pl / fx_rate if fx_rate else 0.0
+        else:
+            market_value = raw_market_value
+            unrealized_pl = raw_unrealized_pl
         
         # 섹터/산업 정보 조회 (24시간 인메모리 캐시 활용)
         try:
@@ -136,9 +154,10 @@ def analyze_portfolio(
         sector_data[sector]['count'] += 1
         sector_data[sector]['total_value_usd'] += market_value
         sector_data[sector]['unrealized_pl_usd'] += unrealized_pl
-        cost = position['avg_cost_usd'] * position['shares']
+        raw_cost = position['avg_cost_usd'] * position['shares']
+        cost = raw_cost / fx_rate if base_currency == 'KRW' and fx_rate else raw_cost
         sector_data[sector]['total_cost_usd'] += cost
-        
+
         # 산업별 집계
         industry_data[industry]['sector'] = sector
         industry_data[industry]['count'] += 1
