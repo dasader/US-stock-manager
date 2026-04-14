@@ -10,6 +10,8 @@ from ..database import get_db
 from .. import crud
 from .position_engine import PositionEngine
 from .price_service import price_service
+from .market_resolver import resolve_market
+from .market_hours import is_krx_open, is_us_open
 
 
 class BackgroundPriceService:
@@ -20,7 +22,11 @@ class BackgroundPriceService:
         self.loading_status: Dict[str, Dict] = {}
         self.price_cache: Dict[str, Dict] = {}
         self.last_update = None
-        self.update_interval = 120  # 2분마다 업데이트
+        self.update_interval = 120  # 유지 (외부 호환)
+        self.check_interval = 30    # 워커 루프 체크 주기(초)
+        self.open_interval = 120    # 시장 개장 중 갱신 주기
+        self.closed_interval = 3600 # 시장 외 갱신 주기
+        self._last_ticker_update: Dict[str, float] = {}
         self.callbacks: List[Callable] = []
         self._lock = threading.Lock()
     
@@ -39,12 +45,25 @@ class BackgroundPriceService:
         self.is_running = False
         print("Background price loading stopped")
     
+    def _interval_for(self, ticker: str) -> int:
+        """티커의 시장 상태에 따른 갱신 주기(초) 반환"""
+        market = resolve_market(ticker)
+        if market == "KRX":
+            return self.open_interval if is_krx_open() else self.closed_interval
+        return self.open_interval if is_us_open() else self.closed_interval
+
+    def _should_update(self, ticker: str) -> bool:
+        """티커를 지금 갱신해야 하는지 여부 반환"""
+        import time as _t
+        last = self._last_ticker_update.get(ticker, 0.0)
+        return (_t.time() - last) >= self._interval_for(ticker)
+
     def _background_worker(self):
         """백그라운드 워커 스레드"""
         while self.is_running:
             try:
                 self._load_all_prices()
-                time.sleep(self.update_interval)
+                time.sleep(self.check_interval)
             except Exception as e:
                 print(f"Background price loading error: {e}")
                 time.sleep(60)  # 에러 시 1분 대기
@@ -70,30 +89,43 @@ class BackgroundPriceService:
             
             print(f"Background loading prices for {len(active_tickers)} unique tickers: {', '.join(active_tickers)}")
             
+            # 시장별 갱신 필요 여부로 필터
+            tickers_to_update = [t for t in active_tickers if self._should_update(t)]
+            if not tickers_to_update:
+                with self._lock:
+                    self.loading_status['current_ticker'] = None
+                    self.loading_status['total'] = 0
+                    self.loading_status['completed'] = 0
+                return
+
+            with self._lock:
+                self.loading_status['total'] = len(tickers_to_update)
+                self.loading_status['completed'] = 0
+
+            print(f"[BG] 갱신 대상 {len(tickers_to_update)}/{len(active_tickers)} 종목")
+
             # 로딩 상태 초기화
             with self._lock:
                 self.loading_status = {
-                    'total': len(active_tickers),
+                    'total': len(tickers_to_update),
                     'completed': 0,
                     'failed': 0,
                     'current_ticker': None,
                     'start_time': datetime.now(),
                     'estimated_completion': None
                 }
-            
-            # 각 티커의 가격 조회
-            for i, ticker in enumerate(active_tickers):
+
+            for i, ticker in enumerate(tickers_to_update):
                 if not self.is_running:
                     break
-                
                 with self._lock:
                     self.loading_status['current_ticker'] = ticker
                     self.loading_status['completed'] = i
-                
                 try:
                     price_data = price_service.get_price(ticker)
                     if price_data:
                         self.price_cache[ticker] = price_data
+                        self._last_ticker_update[ticker] = time.time()
                         with self._lock:
                             self.loading_status['completed'] = i + 1
                     else:
@@ -103,8 +135,6 @@ class BackgroundPriceService:
                     print(f"Failed to load price for {ticker}: {e}")
                     with self._lock:
                         self.loading_status['failed'] += 1
-                
-                # 콜백 호출 (진행률 업데이트)
                 self._notify_callbacks()
             
             # 완료 상태 업데이트
