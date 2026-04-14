@@ -179,3 +179,10 @@ def test_empty_positions_returns_all_zeros():
     assert result["native_krw_market_value"] == 0.0
     assert result["native_usd_unrealized_pl"] == 0.0
     assert result["native_krw_unrealized_pl"] == 0.0
+
+
+def test_unsupported_target_currency_raises():
+    """지원하지 않는 target_currency('JPY') → AssertionError 발생"""
+    agg = PriceAggregator()
+    with pytest.raises(AssertionError, match="지원하지 않는 target_currency"):
+        agg.calculate_position_metrics_multicurrency([], {}, {}, 1400.0, "JPY")

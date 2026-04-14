@@ -107,6 +107,7 @@ class PriceAggregator:
                 "native_krw_unrealized_pl": float,
             }
         """
+        assert target_currency in ("USD", "KRW"), f"지원하지 않는 target_currency: {target_currency}"
         total_market_value = 0.0
         total_unrealized_pl = 0.0
         total_cost = 0.0
