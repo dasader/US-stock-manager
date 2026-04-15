@@ -259,16 +259,6 @@ def get_or_create_fx_cache(db: Session, base: str, quote: str, rate: float, as_o
     return cache
 
 
-def get_latest_fx_cache(db: Session, base: str, quote: str) -> Optional[models.FXRateCache]:
-    """최신 환율 캐시 조회"""
-    return db.query(models.FXRateCache).filter(
-        and_(
-            models.FXRateCache.base == base,
-            models.FXRateCache.quote == quote
-        )
-    ).order_by(models.FXRateCache.as_of.desc()).first()
-
-
 def get_or_create_price_cache(db: Session, ticker: str, price_usd: float, as_of: datetime) -> models.PriceCache:
     """주가 캐시 조회 또는 생성"""
     cache = db.query(models.PriceCache).filter(models.PriceCache.ticker == ticker.upper()).first()
@@ -284,29 +274,6 @@ def get_or_create_price_cache(db: Session, ticker: str, price_usd: float, as_of:
     db.commit()
     db.refresh(cache)
     return cache
-
-
-def get_price_cache(db: Session, ticker: str) -> Optional[models.PriceCache]:
-    """주가 캐시 조회"""
-    return db.query(models.PriceCache).filter(models.PriceCache.ticker == ticker.upper()).first()
-
-
-def get_setting(db: Session, key: str) -> Optional[str]:
-    """설정 조회"""
-    setting = db.query(models.Settings).filter(models.Settings.key == key).first()
-    return setting.value if setting else None
-
-
-def set_setting(db: Session, key: str, value: str):
-    """설정 저장"""
-    setting = db.query(models.Settings).filter(models.Settings.key == key).first()
-    if setting:
-        setting.value = value
-        setting.updated_at = datetime.now()
-    else:
-        setting = models.Settings(key=key, value=value)
-        db.add(setting)
-    db.commit()
 
 
 # Cash CRUD operations
