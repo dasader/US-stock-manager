@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=sqlite:////data/stock_manager.db
       - CORS_ORIGINS=http://localhost:5173,http://localhost:3000,https://mem.photos,http://mem.photos
