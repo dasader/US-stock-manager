@@ -435,7 +435,7 @@ export default function Trades({ accountId }: TradesProps) {
 
                       {editingId === trade.id ? (
                         /* --- Inline edit mode --- */
-                        <div className="flex-1 grid grid-cols-2 sm:grid-cols-6 gap-2 items-center">
+                        <div className="flex-1 grid grid-cols-2 sm:grid-cols-7 gap-2 items-center">
                           <Input
                             type="date"
                             value={editForm.trade_date || ''}
@@ -454,6 +454,17 @@ export default function Trades({ accountId }: TradesProps) {
                           >
                             <option value="BUY">매수</option>
                             <option value="SELL">매도</option>
+                          </select>
+                          <select
+                            value={editForm.account_id ?? ''}
+                            onChange={(e) => setEditForm({ ...editForm, account_id: parseInt(e.target.value) })}
+                            className="h-8 rounded-md border border-border bg-background px-2 text-sm col-span-1"
+                          >
+                            {(accounts ?? allAccounts ?? [])
+                              .filter((a: Account) => a.base_currency === getCur(trade.account_id))
+                              .map((a: Account) => (
+                                <option key={a.id} value={a.id}>{a.name}</option>
+                              ))}
                           </select>
                           <Input
                             type="number"
