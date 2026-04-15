@@ -2,7 +2,7 @@ import re
 from typing import Literal
 
 Market = Literal["KRX", "US"]
-_KRX_TICKER_RE = re.compile(r"^\d{6}$")
+_KRX_TICKER_RE = re.compile(r"^\d[0-9A-Z]{5}$")
 _GOLD_TICKER = "GOLD"
 _GOLD_KRX_CODE = "04020000"
 
