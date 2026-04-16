@@ -10,6 +10,7 @@ from .. import crud, schemas
 from ..database import get_db
 from ..services.position_engine import PositionEngine
 from ..services.price_aggregator import price_aggregator
+from ..services.fx_service import fx_service
 
 router = APIRouter(prefix="/api/snapshots", tags=["snapshots"])
 
@@ -23,24 +24,42 @@ async def create_daily_snapshots(
     """일일 스냅샷 생성 (전체 및 개별 포지션)"""
     if snapshot_date is None:
         snapshot_date = date.today()
-    
+
+    # 환율 조회 (KRW 계정 USD 환산에 필요)
+    fx_data = await fx_service.get_rate("USD", "KRW")
+    fx_rate = fx_data['rate'] if fx_data else 1350.0
+
     # 기존 스냅샷 삭제
     crud.delete_snapshots_by_date(db, snapshot_date)
-    
+
     created_count = 0
-    
+
+    # 계정 맵 로드 (통화 판별용)
+    all_accounts = crud.get_accounts(db)
+    accounts_map = {a.id: a for a in all_accounts}
+
     # 전체 계정 스냅샷
     all_trades = crud.get_all_trades_for_calculation(db)
     engine_all = PositionEngine()
     engine_all.process_trades(all_trades)
     positions_all = engine_all.get_all_positions(include_closed=False)
-    
-    # 가격 데이터 조회
+
+    # 가격 데이터 조회 (통화 인식 집계)
     price_data = price_aggregator.get_prices_for_positions(positions_all)
-    total_market_value_usd, total_unrealized_pl_usd, total_cost_usd = price_aggregator.calculate_position_metrics(positions_all, price_data)
+    mc_metrics = price_aggregator.calculate_position_metrics_multicurrency(
+        positions_all, price_data, accounts_map, fx_rate, "USD"
+    )
+    total_market_value_usd = (
+        mc_metrics["native_usd_market_value"]
+        + mc_metrics["native_krw_market_value"] / fx_rate
+    )
+    total_unrealized_pl_usd = (
+        mc_metrics["native_usd_unrealized_pl"]
+        + mc_metrics["native_krw_unrealized_pl"] / fx_rate
+    )
     total_realized_pl_usd = engine_all.get_total_realized_pl()
     total_pl_usd = total_unrealized_pl_usd + total_realized_pl_usd
-    
+
     # 전체 요약 스냅샷 생성
     snapshot_summary = schemas.DailySnapshotCreate(
         snapshot_date=snapshot_date,
@@ -53,13 +72,13 @@ async def create_daily_snapshots(
     )
     crud.create_snapshot(db, snapshot_summary)
     created_count += 1
-    
+
     # 각 포지션별 스냅샷 생성
     for position in positions_all:
         if position['shares'] > 0:  # 보유 중인 포지션만
             ticker = position['ticker']
             price = price_data.get(ticker, {}).get('price_usd')
-            
+
             if price:
                 snapshot_position = schemas.DailySnapshotCreate(
                     snapshot_date=snapshot_date,
@@ -74,7 +93,7 @@ async def create_daily_snapshots(
                 )
                 crud.create_snapshot(db, snapshot_position)
                 created_count += 1
-    
+
     # 계정별 스냅샷 생성
     accounts = crud.get_accounts(db, is_active=True)
     for account in accounts:
@@ -82,10 +101,20 @@ async def create_daily_snapshots(
         engine_account = PositionEngine()
         engine_account.process_trades(account_trades)
         positions_account = engine_account.get_all_positions(include_closed=False)
-        
-        # 계정별 가격 데이터 조회
+
+        # 계정별 가격 데이터 조회 (통화 인식 집계)
         price_data_account = price_aggregator.get_prices_for_positions(positions_account)
-        account_market_value, account_unrealized_pl, account_cost = price_aggregator.calculate_position_metrics(positions_account, price_data_account)
+        mc_account = price_aggregator.calculate_position_metrics_multicurrency(
+            positions_account, price_data_account, accounts_map, fx_rate, "USD"
+        )
+        account_market_value = (
+            mc_account["native_usd_market_value"]
+            + mc_account["native_krw_market_value"] / fx_rate
+        )
+        account_unrealized_pl = (
+            mc_account["native_usd_unrealized_pl"]
+            + mc_account["native_krw_unrealized_pl"] / fx_rate
+        )
         account_realized_pl = engine_account.get_total_realized_pl()
         account_total_pl = account_unrealized_pl + account_realized_pl
         
