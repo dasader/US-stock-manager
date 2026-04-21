@@ -479,7 +479,7 @@ export default function Dashboard({ accountId }: DashboardProps) {
                           className="border-b border-border/50 hover:bg-muted/40 transition-colors"
                         >
                           <td className="px-4 py-1.5">
-                            <span className="flex items-center gap-1" title={posCur === 'KRW' && (pos as any).longName ? (pos as any).longName : undefined}>
+                            <span className="flex items-center gap-1" title={posCur === 'KRW' && pos.longName ? pos.longName : undefined}>
                               <span className={`font-semibold text-sm${posCur === 'KRW' ? ' text-amber-600 dark:text-amber-400' : ''}`}>{pos.ticker}</span>
                               {posCur === 'KRW' && <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 select-none">KR</span>}
                             </span>

@@ -12,6 +12,7 @@ from ..services.position_engine import PositionEngine
 from ..services.price_service import price_service
 from ..services.background_price_service import background_price_service
 from ..services.price_aggregator import price_aggregator
+from ..services.stock_info_service import stock_info_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/positions", tags=["positions"])
@@ -52,6 +53,11 @@ def get_positions(
             acc = crud.get_account(db, acc_id)
             account_currency_map[acc_id] = acc.base_currency if acc else "USD"
         position['currency'] = account_currency_map[acc_id]
+
+        # KRX 종목은 longName(한국어명) 추가 (24h 캐시)
+        if position['currency'] == 'KRW':
+            info = stock_info_service.get_stock_info(position['ticker'])
+            position['longName'] = info.get('longName') if info else None
     
     # 현재가 추가 (공통 서비스 사용)
     price_data = price_aggregator.get_prices_for_positions(positions)

@@ -42,6 +42,7 @@ export interface Position {
   previous_close_price?: number;
   realized_pl_usd?: number;
   currency?: Currency;
+  longName?: string;
 }
 
 export interface RealizedPL {

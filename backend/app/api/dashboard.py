@@ -154,14 +154,9 @@ async def get_dashboard_summary(
     deposits = crud.get_cash_list(db, None, transaction_type="DEPOSIT", limit=10000)
     withdrawals = crud.get_cash_list(db, None, transaction_type="WITHDRAW", limit=10000)
 
-    def _dep_to_usd(t: object) -> float:
-        acc = accounts_map.get(getattr(t, 'account_id', None))
-        if acc and getattr(acc, 'base_currency', 'USD') == 'KRW' and fx_rate > 0:
-            return t.amount_usd / fx_rate
-        return t.amount_usd
-
-    total_deposits_usd = sum(_dep_to_usd(t) for t in deposits)
-    total_withdrawals_usd = sum(_dep_to_usd(t) for t in withdrawals)
+    account_cur = {a_id: a.base_currency for a_id, a in accounts_map.items()}
+    total_deposits_usd = sum(crud.native_to_usd(t.amount_usd, account_cur.get(t.account_id, 'USD'), fx_rate) for t in deposits)
+    total_withdrawals_usd = sum(crud.native_to_usd(t.amount_usd, account_cur.get(t.account_id, 'USD'), fx_rate) for t in withdrawals)
     net_investment_usd = total_deposits_usd - total_withdrawals_usd  # 순투자금액
     
     # 배당금 요약
@@ -377,16 +372,10 @@ async def _get_account_summary(db: Session, account_id: int, fx_rate: float, fx_
 
     # 입금/출금 총액 계산 (순투자금액 계산용) — KRW 계정 거래 USD 환산
     account_base_currency = getattr(account, 'base_currency', 'USD')
-
-    def _acc_to_usd(t: object) -> float:
-        if account_base_currency == 'KRW' and fx_rate > 0:
-            return t.amount_usd / fx_rate
-        return t.amount_usd
-
     deposits = crud.get_cash_list(db, account_id, transaction_type="DEPOSIT", limit=10000)
     withdrawals = crud.get_cash_list(db, account_id, transaction_type="WITHDRAW", limit=10000)
-    total_deposits_usd = sum(_acc_to_usd(t) for t in deposits)
-    total_withdrawals_usd = sum(_acc_to_usd(t) for t in withdrawals)
+    total_deposits_usd = sum(crud.native_to_usd(t.amount_usd, account_base_currency, fx_rate) for t in deposits)
+    total_withdrawals_usd = sum(crud.native_to_usd(t.amount_usd, account_base_currency, fx_rate) for t in withdrawals)
     net_investment_usd = total_deposits_usd - total_withdrawals_usd  # 순투자금액
 
     # 배당금 요약

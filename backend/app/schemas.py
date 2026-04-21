@@ -114,6 +114,7 @@ class Position(BaseModel):
     previous_close_price: Optional[float] = None  # 전일 종가 (Finnhub Quote API)
     realized_pl_usd: Optional[float] = None  # 실현 손익
     currency: str = "USD"  # 계정 기준 통화 (USD 또는 KRW)
+    longName: Optional[str] = None  # 종목 한국어명 (KRX 종목)
 
 
 class RealizedPLResponse(BaseModel):

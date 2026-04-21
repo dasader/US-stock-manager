@@ -357,28 +357,36 @@ def delete_cash(db: Session, cash_id: int) -> bool:
     return True
 
 
+def native_to_usd(amount: float, base_currency: str, fx_rate: float) -> float:
+    """KRW 계정의 native 금액을 USD로 환산. USD 계정은 그대로 반환."""
+    if base_currency == 'KRW' and fx_rate > 0:
+        return amount / fx_rate
+    return amount
+
+
 def get_cash_balance(db: Session, account_id: Optional[int] = None, fx_rate_krw: float = 1350.0) -> float:
     """현재 현금 잔액 계산 — USD 환산 기준.
-    KRW 계정(base_currency='KRW')의 amount_usd는 실제 KRW 금액이므로 fx_rate_krw로 나눠 USD 변환."""
-    query = db.query(models.Cash, models.Account.base_currency).join(
-        models.Account, models.Cash.account_id == models.Account.id
-    )
+    통화별로 SQL SUM 후 Python에서 FX 변환 (O(통화 종류) = 사실상 O(1))."""
+    from sqlalchemy import func, case
 
+    sign_expr = case(
+        (models.Cash.transaction_type.in_(['DEPOSIT', 'SELL', 'DIVIDEND']), models.Cash.amount_usd),
+        (models.Cash.transaction_type.in_(['WITHDRAW', 'BUY']), -models.Cash.amount_usd),
+        else_=0,
+    )
+    query = (
+        db.query(models.Account.base_currency, func.sum(sign_expr).label('net'))
+        .join(models.Account, models.Cash.account_id == models.Account.id)
+        .group_by(models.Account.base_currency)
+    )
     if account_id:
         query = query.filter(models.Cash.account_id == account_id)
 
-    total = 0.0
-    for cash, base_currency in query.all():
-        amount = cash.amount_usd
-        if base_currency == 'KRW' and fx_rate_krw > 0:
-            amount = amount / fx_rate_krw
-
-        if cash.transaction_type in ('DEPOSIT', 'SELL', 'DIVIDEND'):
-            total += amount
-        elif cash.transaction_type in ('WITHDRAW', 'BUY'):
-            total -= amount
-
-    return total
+    return sum(
+        native_to_usd(net, base_cur, fx_rate_krw)
+        for base_cur, net in query.all()
+        if net is not None
+    )
 
 
 def delete_trades_bulk(db: Session, trade_ids: List[int]) -> int:
