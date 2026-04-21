@@ -21,13 +21,17 @@ class KRXService:
         if code == "04020000":
             return "금 현물 (1Kg)"
         try:
+            import pandas as pd
             name = stock.get_market_ticker_name(code)
             if name is None:
                 return None
             if isinstance(name, str):
-                return name
-            # pykrx가 예외적으로 DataFrame/Series를 돌려주는 경우 방어
-            return str(name)
+                return name or None
+            if isinstance(name, pd.Series):
+                return str(name.iloc[0]) if not name.empty else None
+            if isinstance(name, pd.DataFrame):
+                return str(name.iloc[0, 0]) if not name.empty else None
+            return None
         except Exception as e:
             logger.warning(f"krx get_name failed for {ticker}: {e}")
             return None

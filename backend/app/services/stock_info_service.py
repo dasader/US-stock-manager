@@ -248,7 +248,7 @@ class StockInfoService:
             sector = "Precious Metals"
             industry = "Gold Spot"
         else:
-            name = krx_service.get_name(ticker) or ticker
+            name = krx_service.get_name(ticker)
             sector = krx_service.get_sector(ticker) or "Unknown"
             industry = sector  # KRX 업종을 industry로도 사용
 

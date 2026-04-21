@@ -57,7 +57,8 @@ def get_positions(
         # KRX 종목은 longName(한국어명) 추가 (24h 캐시)
         if position['currency'] == 'KRW':
             info = stock_info_service.get_stock_info(position['ticker'])
-            position['longName'] = info.get('longName') if info else None
+            long_name = info.get('longName') if info else None
+            position['longName'] = long_name if long_name and '\n' not in long_name else None
     
     # 현재가 추가 (공통 서비스 사용)
     price_data = price_aggregator.get_prices_for_positions(positions)
