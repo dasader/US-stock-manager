@@ -357,43 +357,28 @@ def delete_cash(db: Session, cash_id: int) -> bool:
     return True
 
 
-def get_cash_balance(db: Session, account_id: Optional[int] = None) -> float:
-    """현재 현금 잔액 계산 (최적화된 버전)"""
-    from sqlalchemy import func, case
-    
-    # 예상치 못한 transaction_type을 확인하기 위해 모든 타입 조회
-    if account_id:
-        all_types = db.query(models.Cash.transaction_type).filter(
-            models.Cash.account_id == account_id
-        ).distinct().all()
-    else:
-        all_types = db.query(models.Cash.transaction_type).distinct().all()
-    
-    expected_types = {'DEPOSIT', 'WITHDRAW', 'BUY', 'SELL', 'DIVIDEND'}
-    found_types = {t[0] for t in all_types if t[0]}
-    unexpected_types = found_types - expected_types
-    
-    if unexpected_types:
-        logger.warning(
-            f"예상치 못한 transaction_type 발견 (account_id={account_id}): {unexpected_types}. "
-            f"이 값들은 잔액 계산에서 0으로 처리됩니다."
-        )
-    
-    query = db.query(
-        func.sum(
-            case(
-                (models.Cash.transaction_type.in_(['DEPOSIT', 'SELL', 'DIVIDEND']), models.Cash.amount_usd),
-                (models.Cash.transaction_type.in_(['WITHDRAW', 'BUY']), -models.Cash.amount_usd),
-                else_=0
-            )
-        )
+def get_cash_balance(db: Session, account_id: Optional[int] = None, fx_rate_krw: float = 1350.0) -> float:
+    """현재 현금 잔액 계산 — USD 환산 기준.
+    KRW 계정(base_currency='KRW')의 amount_usd는 실제 KRW 금액이므로 fx_rate_krw로 나눠 USD 변환."""
+    query = db.query(models.Cash, models.Account.base_currency).join(
+        models.Account, models.Cash.account_id == models.Account.id
     )
-    
+
     if account_id:
         query = query.filter(models.Cash.account_id == account_id)
-    
-    result = query.scalar()
-    return float(result) if result is not None else 0.0
+
+    total = 0.0
+    for cash, base_currency in query.all():
+        amount = cash.amount_usd
+        if base_currency == 'KRW' and fx_rate_krw > 0:
+            amount = amount / fx_rate_krw
+
+        if cash.transaction_type in ('DEPOSIT', 'SELL', 'DIVIDEND'):
+            total += amount
+        elif cash.transaction_type in ('WITHDRAW', 'BUY'):
+            total -= amount
+
+    return total
 
 
 def delete_trades_bulk(db: Session, trade_ids: List[int]) -> int:

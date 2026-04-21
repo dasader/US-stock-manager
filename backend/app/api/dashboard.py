@@ -147,14 +147,21 @@ async def get_dashboard_summary(
     # 활성 포지션 수
     active_positions_count = len([p for p in positions if p['shares'] > 0])
     
-    # 현금 잔액 (전체)
-    total_cash_usd = crud.get_cash_balance(db, None)
-    
-    # 입금/출금 총액 계산 (순투자금액 계산용)
+    # 현금 잔액 (전체) — KRW 계정 거래는 fx_rate로 USD 환산
+    total_cash_usd = crud.get_cash_balance(db, None, fx_rate_krw=fx_rate)
+
+    # 입금/출금 총액 계산 (순투자금액 계산용) — KRW 계정 거래 USD 환산
     deposits = crud.get_cash_list(db, None, transaction_type="DEPOSIT", limit=10000)
     withdrawals = crud.get_cash_list(db, None, transaction_type="WITHDRAW", limit=10000)
-    total_deposits_usd = sum(t.amount_usd for t in deposits)
-    total_withdrawals_usd = sum(t.amount_usd for t in withdrawals)
+
+    def _dep_to_usd(t: object) -> float:
+        acc = accounts_map.get(getattr(t, 'account_id', None))
+        if acc and getattr(acc, 'base_currency', 'USD') == 'KRW' and fx_rate > 0:
+            return t.amount_usd / fx_rate
+        return t.amount_usd
+
+    total_deposits_usd = sum(_dep_to_usd(t) for t in deposits)
+    total_withdrawals_usd = sum(_dep_to_usd(t) for t in withdrawals)
     net_investment_usd = total_deposits_usd - total_withdrawals_usd  # 순투자금액
     
     # 배당금 요약
@@ -365,16 +372,23 @@ async def _get_account_summary(db: Session, account_id: int, fx_rate: float, fx_
     # 활성 포지션 수
     active_positions_count = len([p for p in positions if p['shares'] > 0])
     
-    # 현금 잔액
-    total_cash_usd = crud.get_cash_balance(db, account_id)
-    
-    # 입금/출금 총액 계산 (순투자금액 계산용)
+    # 현금 잔액 — KRW 계정 거래는 fx_rate로 USD 환산
+    total_cash_usd = crud.get_cash_balance(db, account_id, fx_rate_krw=fx_rate)
+
+    # 입금/출금 총액 계산 (순투자금액 계산용) — KRW 계정 거래 USD 환산
+    account_base_currency = getattr(account, 'base_currency', 'USD')
+
+    def _acc_to_usd(t: object) -> float:
+        if account_base_currency == 'KRW' and fx_rate > 0:
+            return t.amount_usd / fx_rate
+        return t.amount_usd
+
     deposits = crud.get_cash_list(db, account_id, transaction_type="DEPOSIT", limit=10000)
     withdrawals = crud.get_cash_list(db, account_id, transaction_type="WITHDRAW", limit=10000)
-    total_deposits_usd = sum(t.amount_usd for t in deposits)
-    total_withdrawals_usd = sum(t.amount_usd for t in withdrawals)
+    total_deposits_usd = sum(_acc_to_usd(t) for t in deposits)
+    total_withdrawals_usd = sum(_acc_to_usd(t) for t in withdrawals)
     net_investment_usd = total_deposits_usd - total_withdrawals_usd  # 순투자금액
-    
+
     # 배당금 요약
     dividend_summary = crud.get_dividend_summary(db, account_id)
     total_dividends_usd = dividend_summary['total_dividends_usd']
@@ -539,9 +553,9 @@ async def _get_account_summary_data(db: Session, account_id: int, account_name: 
     # 활성 포지션 수
     active_positions_count = len([p for p in positions if p['shares'] > 0])
     
-    # 현금 잔액
-    total_cash_usd = crud.get_cash_balance(db, account_id)
-    
+    # 현금 잔액 — KRW 계정 거래는 fx_rate로 USD 환산
+    total_cash_usd = crud.get_cash_balance(db, account_id, fx_rate_krw=fx_rate)
+
     # 전일 대비 변화량 계산
     # 포지션별 미실현 손익 변화량 합산 (일관성 유지)
     total_position_day_change = 0.0

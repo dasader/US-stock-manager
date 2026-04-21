@@ -41,20 +41,26 @@ def get_cash_list(
 @router.get("/balance/", response_model=schemas.CashSummary)
 async def get_cash_summary(account_id: Optional[int] = None, db: Session = Depends(get_db)):
     """현금 잔액 및 요약 조회"""
-    balance = crud.get_cash_balance(db, account_id)
-    
-    # 입금/출금 총액 계산
-    deposits = crud.get_cash_list(db, account_id, transaction_type="DEPOSIT", limit=10000)
-    withdrawals = crud.get_cash_list(db, account_id, transaction_type="WITHDRAW", limit=10000)
-    
-    total_deposits = sum(t.amount_usd for t in deposits)
-    total_withdrawals = sum(t.amount_usd for t in withdrawals)
-    
-    # KRW 환산
     fx_data = await fx_service.get_rate("USD", "KRW")
     fx_rate = fx_data['rate'] if fx_data else 1350.0
+
+    balance = crud.get_cash_balance(db, account_id, fx_rate_krw=fx_rate)
     balance_krw = balance * fx_rate
-    
+
+    # 입금/출금 총액 계산 — KRW 계정 거래는 USD 환산
+    accounts_map = {a.id: a for a in crud.get_accounts(db)}
+
+    def _to_usd(t) -> float:
+        acc = accounts_map.get(t.account_id)
+        if acc and getattr(acc, 'base_currency', 'USD') == 'KRW' and fx_rate > 0:
+            return t.amount_usd / fx_rate
+        return t.amount_usd
+
+    deposits = crud.get_cash_list(db, account_id, transaction_type="DEPOSIT", limit=10000)
+    withdrawals = crud.get_cash_list(db, account_id, transaction_type="WITHDRAW", limit=10000)
+    total_deposits = sum(_to_usd(t) for t in deposits)
+    total_withdrawals = sum(_to_usd(t) for t in withdrawals)
+
     return schemas.CashSummary(
         total_cash_usd=balance,
         total_cash_krw=balance_krw,
