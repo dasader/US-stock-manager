@@ -135,18 +135,23 @@ async def get_dashboard_summary(
         
         position['day_change_pl_usd'] = day_change
     
-    # 실현 손익
-    total_realized_pl_usd = engine.get_total_realized_pl()
-    
+    # 실현 손익 — account 통화 인식 (KRW 계정 실현손익은 fx_rate로 USD 환산)
+    total_realized_pl_usd = sum(
+        pos.realized_pl / fx_rate
+        if getattr(accounts_map.get(pos.account_id), 'base_currency', 'USD') == 'KRW'
+        else pos.realized_pl
+        for pos in engine.positions.values()
+    )
+
     # 총 손익
     total_pl_usd = total_unrealized_pl_usd + total_realized_pl_usd
-    
+
     # 미실현 손익률
     total_unrealized_pl_percent = (total_unrealized_pl_usd / total_cost_usd * 100) if total_cost_usd > 0 else 0.0
-    
+
     # 활성 포지션 수
     active_positions_count = len([p for p in positions if p['shares'] > 0])
-    
+
     # 현금 잔액 (전체) — KRW 계정 거래는 fx_rate로 USD 환산
     total_cash_usd = crud.get_cash_balance(db, None, fx_rate_krw=fx_rate)
 
@@ -354,19 +359,20 @@ async def _get_account_summary(db: Session, account_id: int, fx_rate: float, fx_
             logger.debug(f"[ACCOUNT] {ticker}: 계산불가 ({snapshot_info}, {quote_info})")
         
         position['day_change_pl_usd'] = day_change
-    
-    # 실현 손익
-    total_realized_pl_usd = engine.get_total_realized_pl()
-    
+
+    # 실현 손익 — KRW 계정 실현손익은 fx_rate로 USD 환산
+    raw_realized = engine.get_total_realized_pl()
+    total_realized_pl_usd = raw_realized / fx_rate if account_base_currency == 'KRW' else raw_realized
+
     # 총 손익
     total_pl_usd = total_unrealized_pl_usd + total_realized_pl_usd
-    
+
     # 미실현 손익률
     total_unrealized_pl_percent = (total_unrealized_pl_usd / total_cost_usd * 100) if total_cost_usd > 0 else 0.0
-    
+
     # 활성 포지션 수
     active_positions_count = len([p for p in positions if p['shares'] > 0])
-    
+
     # 현금 잔액 — KRW 계정 거래는 fx_rate로 USD 환산
     total_cash_usd = crud.get_cash_balance(db, account_id, fx_rate_krw=fx_rate)
 

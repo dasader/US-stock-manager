@@ -202,7 +202,12 @@ def create_daily_snapshot_job() -> dict:
             mc_metrics["native_usd_unrealized_pl"]
             + mc_metrics["native_krw_unrealized_pl"] / fx_rate
         )
-        total_realized_pl_usd = engine_all.get_total_realized_pl()
+        total_realized_pl_usd = sum(
+            pos.realized_pl / fx_rate
+            if getattr(accounts_map.get(pos.account_id), 'base_currency', 'USD') == 'KRW'
+            else pos.realized_pl
+            for pos in engine_all.positions.values()
+        )
         total_pl_usd = total_unrealized_pl_usd + total_realized_pl_usd
 
         # 전체 요약 스냅샷 생성
@@ -260,7 +265,9 @@ def create_daily_snapshot_job() -> dict:
                 mc_account["native_usd_unrealized_pl"]
                 + mc_account["native_krw_unrealized_pl"] / fx_rate
             )
-            account_realized_pl = engine_account.get_total_realized_pl()
+            account_base_cur = getattr(account, 'base_currency', 'USD') or 'USD'
+            raw_account_realized = engine_account.get_total_realized_pl()
+            account_realized_pl = raw_account_realized / fx_rate if account_base_cur == 'KRW' else raw_account_realized
             account_total_pl = account_unrealized_pl + account_realized_pl
             
             # 계정별 요약 스냅샷
