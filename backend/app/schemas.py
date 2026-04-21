@@ -241,6 +241,7 @@ class CashResponse(CashBase):
     """현금 응답"""
     id: int
     related_trade_id: Optional[int] = None
+    related_dividend_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 

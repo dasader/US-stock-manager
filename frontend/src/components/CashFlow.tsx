@@ -213,6 +213,8 @@ export default function CashFlow({ accountId }: CashFlowProps) {
 
     if (cashTransactions) {
       for (const c of cashTransactions) {
+        // Dividend 레코드와 연결된 Cash는 건너뜀 — Dividend 레코드가 상세 정보와 함께 표시됨
+        if (c.related_dividend_id != null) continue;
         items.push({
           id: `cash-${c.id}`,
           date: c.transaction_date,
@@ -228,15 +230,8 @@ export default function CashFlow({ accountId }: CashFlowProps) {
       }
     }
 
-    // cash 쪽에서 이미 표시 중인 dividend ID를 수집 (related_dividend_id로 연결된 것)
-    const linkedDividendIds = new Set(
-      items.filter((i) => i.relatedDividendId != null).map((i) => i.relatedDividendId!)
-    );
-
     if (dividends) {
       for (const d of dividends) {
-        // cash 레코드와 이미 연결된 배당은 건너뛰기 (중복 방지)
-        if (linkedDividendIds.has(d.id)) continue;
         items.push({
           id: `div-${d.id}`,
           date: d.dividend_date,
