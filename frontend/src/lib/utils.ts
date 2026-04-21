@@ -5,6 +5,18 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function formatCurrencyInt(value: number | null | undefined, currency: 'USD' | 'KRW' = 'USD'): string {
+  if (value === null || value === undefined || isNaN(value)) {
+    return currency === 'USD' ? '$0' : '₩0';
+  }
+  return new Intl.NumberFormat(currency === 'USD' ? 'en-US' : 'ko-KR', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
 export function formatCurrency(value: number | null | undefined, currency: 'USD' | 'KRW' = 'USD'): string {
   // null/undefined 안전 처리
   if (value === null || value === undefined || isNaN(value)) {

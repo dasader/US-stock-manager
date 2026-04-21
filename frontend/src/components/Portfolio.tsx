@@ -21,8 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
-import { cn } from '@/lib/utils';
+import { formatCurrency, formatCurrencyInt, formatPercent, formatNumber, cn } from '@/lib/utils';
 import { useChartTheme } from '@/hooks/useChartTheme';
 import { useToast } from '@/hooks/useToast';
 import { useDisplayCurrency } from '@/hooks/useDisplayCurrency';
@@ -572,13 +571,13 @@ export default function Portfolio({ accountId }: PortfolioProps) {
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground mb-1">총 평가금액</p>
                 <p className="text-lg font-bold font-numeric truncate">
-                  {summary ? formatCurrency(totalMarketValueDisplay, displayCurrency) : '--'}
+                  {summary ? formatCurrencyInt(totalMarketValueDisplay, displayCurrency) : '--'}
                 </p>
                 <p className="text-xs text-muted-foreground font-numeric truncate">
                   {summary && displayCurrency === 'USD'
-                    ? formatCurrency(summary.total_market_value_krw, 'KRW')
+                    ? formatCurrencyInt(summary.total_market_value_krw, 'KRW')
                     : summary
-                    ? formatCurrency(summary.total_market_value_usd, 'USD')
+                    ? formatCurrencyInt(summary.total_market_value_usd, 'USD')
                     : ''}
                 </p>
               </div>
@@ -592,7 +591,7 @@ export default function Portfolio({ accountId }: PortfolioProps) {
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground mb-1">미실현 손익</p>
                 <p className={cn('text-lg font-bold font-numeric truncate', plClass(unrealizedPL))}>
-                  {summary ? formatCurrency(unrealizedPL, displayCurrency) : '--'}
+                  {summary ? formatCurrencyInt(unrealizedPL, displayCurrency) : '--'}
                 </p>
                 <p className={cn('text-xs font-numeric', plClass(summary?.total_unrealized_pl_percent))}>
                   {summary ? formatPercent(summary.total_unrealized_pl_percent) : ''}
@@ -608,10 +607,10 @@ export default function Portfolio({ accountId }: PortfolioProps) {
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground mb-1">총 손익</p>
                 <p className={cn('text-lg font-bold font-numeric truncate', plClass(totalPL))}>
-                  {summary ? formatCurrency(totalPL, displayCurrency) : '--'}
+                  {summary ? formatCurrencyInt(totalPL, displayCurrency) : '--'}
                 </p>
                 <p className="text-xs text-muted-foreground font-numeric truncate">
-                  실현 {formatCurrency(realizedPL, displayCurrency)} | 일간 {formatCurrency(dayChangePL, displayCurrency)}
+                  실현 {formatCurrencyInt(realizedPL, displayCurrency)} | 일간 {formatCurrencyInt(dayChangePL, displayCurrency)}
                 </p>
               </div>
             </div>
@@ -827,9 +826,12 @@ export default function Portfolio({ accountId }: PortfolioProps) {
                   const urplDisp = toDisplay(p.unrealized_pl_usd ?? 0, posCur);
                   const weight = totalMarketValue > 0 ? (mvDisp / totalMarketValue) * 100 : 0;
                   return (
-                    <div key={`${p.account_id}-${p.ticker}`} className="p-4 space-y-2">
+                    <div key={`${p.account_id}-${p.ticker}`} className={cn("p-4 space-y-2", posCur === 'KRW' && 'bg-amber-500/5')}>
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-sm">{p.ticker}</span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="font-bold text-sm" title={posCur === 'KRW' && p.longName ? p.longName : undefined}>{p.ticker}</span>
+                          {posCur === 'KRW' && <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 select-none">KR</span>}
+                        </span>
                         <span className={cn('font-numeric text-sm font-semibold', plClass(urplDisp))}>
                           {formatCurrency(urplDisp, displayCurrency)}
                         </span>
@@ -900,11 +902,15 @@ export default function Portfolio({ accountId }: PortfolioProps) {
                           className={cn(
                             'group relative transition-colors',
                             p.is_closed && 'opacity-50',
+                            posCur === 'KRW' && 'bg-amber-500/5',
                           )}
                         >
                           <TableCell className="font-bold relative">
-                            <span className="absolute left-0 top-0 bottom-0 w-0.5 rounded-r bg-primary/0 group-hover:bg-primary transition-colors" />
-                            {p.ticker}
+                            <span className={cn('absolute left-0 top-0 bottom-0 w-0.5 rounded-r transition-colors', posCur === 'KRW' ? 'bg-amber-500/0 group-hover:bg-amber-500' : 'bg-primary/0 group-hover:bg-primary')} />
+                            <span className="flex items-center gap-1" title={posCur === 'KRW' && p.longName ? p.longName : undefined}>
+                              {p.ticker}
+                              {posCur === 'KRW' && <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 select-none">KR</span>}
+                            </span>
                           </TableCell>
                           <TableCell className="font-numeric text-right">{formatNumber(p.shares, p.shares % 1 === 0 ? 0 : 4)}</TableCell>
                           <TableCell className="font-numeric text-right">{formatCurrency(p.avg_cost_usd, posCur)}</TableCell>
