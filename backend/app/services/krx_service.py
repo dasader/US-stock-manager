@@ -17,24 +17,46 @@ class KRXService:
 
     def get_name(self, ticker: str) -> Optional[str]:
         code = to_krx_code(ticker)
-        # 금현물은 pykrx 주식 API가 아닌 고정 명칭 반환
         if code == "04020000":
             return "금 현물 (1Kg)"
+
+        name = self._name_from_pykrx(code) or self._name_from_etf(code) or self._name_from_yfinance(code)
+        return name
+
+    def _name_from_pykrx(self, code: str) -> Optional[str]:
         try:
             import pandas as pd
             name = stock.get_market_ticker_name(code)
-            if name is None:
-                return None
             if isinstance(name, str):
                 return name or None
             if isinstance(name, pd.Series):
                 return str(name.iloc[0]) if not name.empty else None
             if isinstance(name, pd.DataFrame):
                 return str(name.iloc[0, 0]) if not name.empty else None
-            return None
         except Exception as e:
-            logger.warning(f"krx get_name failed for {ticker}: {e}")
-            return None
+            logger.debug(f"pykrx market name failed for {code}: {e}")
+        return None
+
+    def _name_from_etf(self, code: str) -> Optional[str]:
+        try:
+            today = datetime.now().strftime("%Y%m%d")
+            etf_list = stock.get_etf_ticker_list(today)
+            if code in etf_list:
+                name = stock.get_etf_ticker_name(code)
+                return name if isinstance(name, str) and name else None
+        except Exception as e:
+            logger.debug(f"pykrx ETF name failed for {code}: {e}")
+        return None
+
+    def _name_from_yfinance(self, code: str) -> Optional[str]:
+        try:
+            import yfinance as yf
+            info = yf.Ticker(f"{code}.KS").fast_info
+            name = getattr(info, 'shortName', None) or getattr(info, 'longName', None)
+            return name if isinstance(name, str) and name else None
+        except Exception as e:
+            logger.debug(f"yfinance KS name failed for {code}: {e}")
+        return None
 
     def get_price(self, ticker: str) -> Optional[float]:
         code = to_krx_code(ticker)
