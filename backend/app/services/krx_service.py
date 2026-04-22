@@ -38,12 +38,17 @@ class KRXService:
         return None
 
     def _name_from_etf(self, code: str) -> Optional[str]:
+        # get_etf_ticker_list / get_etf_ticker_name 은 KRX API 응답 형식 변경으로
+        # JSONDecodeError 가 발생하므로, 상장종목검색 엔드포인트를 직접 사용한다.
         try:
-            today = datetime.now().strftime("%Y%m%d")
-            etf_list = stock.get_etf_ticker_list(today)
-            if code in etf_list:
-                name = stock.get_etf_ticker_name(code)
-                return name if isinstance(name, str) and name else None
+            from pykrx.website.krx.etx.core import 상장종목검색
+            df = 상장종목검색().fetch(market="ALL", name=code)
+            if df is None or df.empty:
+                return None
+            hit = df[df["short_code"] == code]
+            if hit.empty:
+                return None
+            return str(hit.iloc[0]["codeName"]) or None
         except Exception as e:
             logger.debug(f"pykrx ETF name failed for {code}: {e}")
         return None
