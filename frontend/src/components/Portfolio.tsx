@@ -734,18 +734,10 @@ export default function Portfolio({ accountId }: PortfolioProps) {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">계정별 요약</CardTitle>
             </CardHeader>
-            <CardContent className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>계정</TableHead>
-                    <TableHead className="text-right">평가금액</TableHead>
-                    <TableHead className="text-right">미실현 손익</TableHead>
-                    <TableHead className="text-right">실현 손익</TableHead>
-                    <TableHead className="text-right">종목 수</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+            <CardContent className={isMobile ? 'p-0' : 'overflow-x-auto'}>
+              {isMobile ? (
+                /* ---- Mobile Card List ---- */
+                <div className="divide-y divide-border">
                   {summary.accounts_summary.map((acc) => {
                     const accCur = getCurForAccount(acc.account_id);
                     const mvDisplay = displayCurrency === 'KRW'
@@ -758,26 +750,78 @@ export default function Portfolio({ accountId }: PortfolioProps) {
                       ? acc.total_realized_pl_krw
                       : acc.total_realized_pl_usd;
                     return (
-                      <TableRow key={acc.account_id}>
-                        <TableCell className="font-medium">
-                          <span className="flex items-center gap-1.5">
+                      <div key={acc.account_id} className="p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="flex items-center gap-1.5 font-semibold text-sm">
                             {acc.account_name}
                             <CurrencyBadge currency={accCur} />
                           </span>
-                        </TableCell>
-                        <TableCell className="text-right font-numeric">{formatCurrency(mvDisplay, displayCurrency)}</TableCell>
-                        <TableCell className={cn('text-right font-numeric', plClass(urplDisplay))}>
-                          {formatCurrency(urplDisplay, displayCurrency)}
-                        </TableCell>
-                        <TableCell className={cn('text-right font-numeric', plClass(rplDisplay))}>
-                          {formatCurrency(rplDisplay, displayCurrency)}
-                        </TableCell>
-                        <TableCell className="text-right font-numeric">{acc.active_positions_count}</TableCell>
-                      </TableRow>
+                          <span className="text-xs text-muted-foreground">종목 {acc.active_positions_count}개</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+                          <div>
+                            <span className="block">평가금액</span>
+                            <span className="font-numeric text-foreground">{formatCurrency(mvDisplay, displayCurrency)}</span>
+                          </div>
+                          <div>
+                            <span className="block">미실현 손익</span>
+                            <span className={cn('font-numeric', plClass(urplDisplay))}>{formatCurrency(urplDisplay, displayCurrency)}</span>
+                          </div>
+                          <div>
+                            <span className="block">실현 손익</span>
+                            <span className={cn('font-numeric', plClass(rplDisplay))}>{formatCurrency(rplDisplay, displayCurrency)}</span>
+                          </div>
+                        </div>
+                      </div>
                     );
                   })}
-                </TableBody>
-              </Table>
+                </div>
+              ) : (
+                /* ---- Desktop Table ---- */
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>계정</TableHead>
+                      <TableHead className="text-right">평가금액</TableHead>
+                      <TableHead className="text-right">미실현 손익</TableHead>
+                      <TableHead className="text-right">실현 손익</TableHead>
+                      <TableHead className="text-right">종목 수</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {summary.accounts_summary.map((acc) => {
+                      const accCur = getCurForAccount(acc.account_id);
+                      const mvDisplay = displayCurrency === 'KRW'
+                        ? acc.total_market_value_krw
+                        : acc.total_market_value_usd;
+                      const urplDisplay = displayCurrency === 'KRW'
+                        ? acc.total_unrealized_pl_krw
+                        : acc.total_unrealized_pl_usd;
+                      const rplDisplay = displayCurrency === 'KRW'
+                        ? acc.total_realized_pl_krw
+                        : acc.total_realized_pl_usd;
+                      return (
+                        <TableRow key={acc.account_id}>
+                          <TableCell className="font-medium">
+                            <span className="flex items-center gap-1.5">
+                              {acc.account_name}
+                              <CurrencyBadge currency={accCur} />
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right font-numeric">{formatCurrency(mvDisplay, displayCurrency)}</TableCell>
+                          <TableCell className={cn('text-right font-numeric', plClass(urplDisplay))}>
+                            {formatCurrency(urplDisplay, displayCurrency)}
+                          </TableCell>
+                          <TableCell className={cn('text-right font-numeric', plClass(rplDisplay))}>
+                            {formatCurrency(rplDisplay, displayCurrency)}
+                          </TableCell>
+                          <TableCell className="text-right font-numeric">{acc.active_positions_count}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         )}
