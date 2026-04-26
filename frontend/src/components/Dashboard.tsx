@@ -84,8 +84,7 @@ export default function Dashboard({ accountId }: DashboardProps) {
   const accountCurrencyMap = useAccountCurrencyMap();
 
   // FX 환율 및 통화 변환
-  const { toDisplay, fxRate } = useCurrencyConversion();
-  const fxUsdKrw = fxRate ?? summary?.fx_rate_usd_krw ?? 1350;
+  const { toDisplay } = useCurrencyConversion();
 
   const getCurForAccount = (accountId?: number): Currency =>
     accountId != null ? (accountCurrencyMap.get(accountId) ?? 'USD') : 'USD';
@@ -138,8 +137,7 @@ export default function Dashboard({ accountId }: DashboardProps) {
         const cur = (p.currency as Currency) ?? getCurForAccount(p.account_id);
         return sum + toDisplay(p.market_value_usd ?? 0, cur);
       }, 0);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [positions, displayCurrency, fxUsdKrw, accountCurrencyMap]);
+  }, [positions, toDisplay, accountCurrencyMap]);
 
   const unrealizedPL = summary?.total_unrealized_pl_usd ?? 0;
   const realizedPL = summary?.total_realized_pl_usd ?? 0;
