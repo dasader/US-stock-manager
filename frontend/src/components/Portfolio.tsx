@@ -7,9 +7,10 @@ import {
   marketApi,
   snapshotsApi,
   analysisApi,
-  accountsApi,
-  fxApi,
 } from '@/services/api';
+import { QUERY_CONFIG } from '@/constants/queryConfig';
+import { useCurrencyConversion } from '@/hooks/useCurrencyConversion';
+import { useAccountCurrencyMap } from '@/hooks/useAccountCurrencyMap';
 import { Card, CardContent, CardHeader, CardTitle, GlassCard } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -165,6 +166,8 @@ export default function Portfolio({ accountId }: PortfolioProps) {
 
   // Display currency toggle
   const [displayCurrency, setDisplayCurrency] = useDisplayCurrency();
+  const { toDisplay } = useCurrencyConversion();
+  const accountCurrencyMap = useAccountCurrencyMap();
 
   // Tab & section refs
   const [activeTab, setActiveTab] = useState<TabId>('summary');
@@ -204,13 +207,13 @@ export default function Portfolio({ accountId }: PortfolioProps) {
       dashboardApi
         .getSummary({ account_id: accountId ?? undefined, include_account_summaries: accountId === null })
         .then((r) => r.data),
-    refetchInterval: 60000,
+    ...QUERY_CONFIG.MEDIUM,
   });
 
   const { data: nasdaqData } = useQuery({
     queryKey: ['nasdaq-index'],
     queryFn: () => marketApi.getNasdaqIndex().then((r) => r.data),
-    refetchInterval: 60000,
+    ...QUERY_CONFIG.MEDIUM,
     retry: 1,
   });
 
@@ -220,7 +223,7 @@ export default function Portfolio({ accountId }: PortfolioProps) {
       positionsApi
         .getAll({ account_id: accountId ?? undefined, include_closed: includeClosed })
         .then((r) => r.data),
-    refetchInterval: 60000,
+    ...QUERY_CONFIG.MEDIUM,
   });
 
   const { data: snapshots } = useQuery({
@@ -233,31 +236,19 @@ export default function Portfolio({ accountId }: PortfolioProps) {
           account_id: accountId ?? undefined,
         })
         .then((r) => r.data),
-    refetchInterval: 60000,
+    ...QUERY_CONFIG.MEDIUM,
   });
 
   const { data: analysis, isLoading: analysisLoading } = useQuery({
     queryKey: ['portfolio-analysis', accountId],
     queryFn: () => analysisApi.getPortfolioAnalysis(accountId ?? undefined).then((r) => r.data),
-    refetchInterval: 60000,
+    ...QUERY_CONFIG.MEDIUM,
   });
 
   const { data: bgStatus } = useQuery({
     queryKey: ['background-loading-status'],
     queryFn: () => backgroundApi.getPriceLoadingStatus().then((r) => r.data),
-    refetchInterval: 2000,
-  });
-
-  const { data: allAccounts } = useQuery({
-    queryKey: ['accounts', 'all'],
-    queryFn: () => accountsApi.getAll().then((r) => r.data),
-    staleTime: 60_000,
-  });
-
-  const { data: fxData } = useQuery({
-    queryKey: ['fx-rate', 'USD', 'KRW'],
-    queryFn: () => fxApi.getUSDKRW().then((r) => r.data),
-    staleTime: 60_000,
+    ...QUERY_CONFIG.REALTIME,
   });
 
   useEffect(() => {
@@ -271,14 +262,6 @@ export default function Portfolio({ accountId }: PortfolioProps) {
   // Currency helpers
   // -------------------------------------------------------------------------
 
-  const accountCurrencyMap = useMemo(() => {
-    const m = new Map<number, Currency>();
-    (allAccounts ?? []).forEach((a) => m.set(a.id, (a.base_currency ?? 'USD') as Currency));
-    return m;
-  }, [allAccounts]);
-
-  const fxUsdKrw = (fxData?.rate ?? summary?.fx_rate_usd_krw ?? 1350);
-
   const getCurForAccount = useCallback((accountId?: number): Currency =>
     accountId != null ? (accountCurrencyMap.get(accountId) ?? 'USD') : 'USD',
   [accountCurrencyMap]);
@@ -286,14 +269,6 @@ export default function Portfolio({ accountId }: PortfolioProps) {
   const getPosCurrency = useCallback((p: { currency?: Currency; account_id: number }): Currency =>
     (p.currency as Currency | undefined) ?? getCurForAccount(p.account_id),
   [getCurForAccount]);
-
-  /** Convert an amount from its native currency to the current displayCurrency */
-  const toDisplay = useCallback((amount: number, nativeCur: Currency): number => {
-    if (nativeCur === displayCurrency) return amount;
-    if (nativeCur === 'USD' && displayCurrency === 'KRW') return amount * fxUsdKrw;
-    if (nativeCur === 'KRW' && displayCurrency === 'USD') return fxUsdKrw > 0 ? amount / fxUsdKrw : 0;
-    return amount;
-  }, [displayCurrency, fxUsdKrw]);
 
   // -------------------------------------------------------------------------
   // Derived data

@@ -1,12 +1,15 @@
 """
 주가 조회 서비스 (yfinance 사용)
 """
+import logging
 import yfinance as yf
 from datetime import datetime
 from typing import Optional, Dict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from .market_resolver import resolve_market
 from .krx_service import krx_service
+
+logger = logging.getLogger(__name__)
 
 
 class PriceService:
@@ -43,7 +46,7 @@ class PriceService:
                     "cached": True
                 }
             elif cache_age < self.cache_duration:
-                print(f"[CACHE] {ticker}: 캐시 데이터는 있지만 previous_close가 없음. 새로 조회합니다.")
+                logger.debug("[CACHE] %s: 캐시 데이터는 있지만 previous_close가 없음. 새로 조회합니다.", ticker)
 
         try:
             ticker_obj = yf.Ticker(ticker)
@@ -54,7 +57,7 @@ class PriceService:
 
             # fast_info 실패 시 history 폴백
             if current_price is None or current_price <= 0:
-                print(f"[YFINANCE] {ticker}: fast_info 실패, history 폴백 시도")
+                logger.warning("[YFINANCE] %s: fast_info 실패, history 폴백 시도", ticker)
                 hist = ticker_obj.history(period='5d')
                 if not hist.empty:
                     current_price = float(hist['Close'].iloc[-1])
@@ -64,7 +67,7 @@ class PriceService:
                 # 캐시가 있으면 오래된 것이라도 반환
                 if ticker in self.cache:
                     cached_data = self.cache[ticker]
-                    print(f"[CACHE] {ticker}: 조회 실패. 캐시된 이전 데이터 사용")
+                    logger.info("[CACHE] %s: 조회 실패. 캐시된 이전 데이터 사용", ticker)
                     return {
                         "ticker": ticker,
                         "price_usd": cached_data['price'],
@@ -91,16 +94,16 @@ class PriceService:
             }
 
             pc_str = f"${result['previous_close']:.2f}" if result['previous_close'] else "N/A"
-            print(f"[YFINANCE] {ticker}: ${result['price_usd']:.2f} (Previous Close: {pc_str})")
+            logger.debug("[YFINANCE] %s: $%.2f (Previous Close: %s)", ticker, result['price_usd'], pc_str)
             return result
 
         except Exception as e:
-            print(f"[ERROR] {ticker}: {e}")
+            logger.error("[ERROR] %s: %s", ticker, e)
 
             # 캐시가 있으면 오래된 것이라도 반환
             if ticker in self.cache:
                 cached_data = self.cache[ticker]
-                print(f"[CACHE] {ticker}: 오류 발생. 캐시된 데이터 사용")
+                logger.info("[CACHE] %s: 오류 발생. 캐시된 데이터 사용", ticker)
                 return {
                     "ticker": ticker,
                     "price_usd": cached_data['price'],
@@ -154,7 +157,7 @@ class PriceService:
             "as_of": now,
             "timestamp": now,
         }
-        print(f"[KRX] {ticker}: KRW {price:,.0f}")
+        logger.debug("[KRX] %s: KRW %s", ticker, f"{price:,.0f}")
         return result
 
     def get_multiple_prices(self, tickers: list) -> Dict[str, Optional[Dict]]:

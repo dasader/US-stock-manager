@@ -1,7 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { cashApi, dividendsApi, accountsApi, tradesApi, fxApi } from '@/services/api';
+import { cashApi, dividendsApi, accountsApi, tradesApi } from '@/services/api';
 import { useDisplayCurrency } from '../hooks/useDisplayCurrency';
+import { useCurrencyConversion } from '@/hooks/useCurrencyConversion';
+import { useAccountCurrencyMap } from '@/hooks/useAccountCurrencyMap';
+import { QUERY_CONFIG } from '@/constants/queryConfig';
 import { Card, CardContent, CardHeader, CardTitle, GlassCard } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -97,21 +100,8 @@ export default function CashFlow({ accountId }: CashFlowProps) {
   const { toast } = useToast();
   const chartTheme = useChartTheme();
   const [displayCurrency] = useDisplayCurrency();
-
-  // FX rate for currency conversion
-  const { data: fx } = useQuery({
-    queryKey: ['fx-rate', 'USD', 'KRW'],
-    queryFn: () => fxApi.getUSDKRW(),
-    staleTime: 60_000,
-  });
-  const fxUsdKrw = fx?.data?.rate ?? 1350;
-
-  const toDisplay = (amount: number, cur: Currency): number => {
-    if (cur === displayCurrency) return amount;
-    if (cur === 'USD' && displayCurrency === 'KRW') return amount * fxUsdKrw;
-    if (cur === 'KRW' && displayCurrency === 'USD') return fxUsdKrw > 0 ? amount / fxUsdKrw : 0;
-    return amount;
-  };
+  const { toDisplay } = useCurrencyConversion();
+  const accountCurrencyMap = useAccountCurrencyMap();
 
   // --- State ---
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
@@ -176,35 +166,31 @@ export default function CashFlow({ accountId }: CashFlowProps) {
     queryFn: () => accountsApi.getAll(true).then((r) => r.data),
   });
 
-  // 계정 ID로 통화 찾기
-  const getAccountCurrency = (accountId?: number): Currency => {
-    if (accountId == null) return 'USD';
-    const account = accounts?.find((a) => a.id === accountId);
-    return account?.base_currency ?? 'USD';
-  };
+  const getAccountCurrency = (id?: number): Currency =>
+    id != null ? (accountCurrencyMap.get(id) ?? 'USD') : 'USD';
 
   const { data: cashSummary } = useQuery({
     queryKey: ['cash-summary', accountId],
     queryFn: () => cashApi.getSummary(accountId || undefined).then((r) => r.data),
-    refetchInterval: 30000,
+    ...QUERY_CONFIG.MEDIUM,
   });
 
   const { data: dividendSummary } = useQuery({
     queryKey: ['dividend-summary', accountId],
     queryFn: () => dividendsApi.getSummary(accountId || undefined).then((r) => r.data),
-    refetchInterval: 30000,
+    ...QUERY_CONFIG.MEDIUM,
   });
 
   const { data: cashTransactions } = useQuery({
     queryKey: ['cash-transactions', accountId],
     queryFn: () => cashApi.getAll({ account_id: accountId || undefined }).then((r) => r.data),
-    refetchInterval: 30000,
+    ...QUERY_CONFIG.MEDIUM,
   });
 
   const { data: dividends } = useQuery({
     queryKey: ['dividends', accountId],
     queryFn: () => dividendsApi.getAll({ account_id: accountId || undefined }).then((r) => r.data),
-    refetchInterval: 30000,
+    ...QUERY_CONFIG.MEDIUM,
   });
 
   // --- Derived: Unified Timeline ---
@@ -325,7 +311,7 @@ export default function CashFlow({ accountId }: CashFlowProps) {
       ...map[m],
       withdrawals: -map[m].withdrawals, // negative for chart display
     }));
-  }, [cashTransactions, dividends, displayCurrency, fxUsdKrw, accounts]);
+  }, [cashTransactions, dividends, displayCurrency, toDisplay, accountCurrencyMap]);
 
   // --- KPI values ---
   const totalCash = cashSummary?.total_cash_usd ?? 0;
