@@ -30,7 +30,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 from .database import init_db, engine
-from .migrations import ensure_base_currency_column
+from .migrations import ensure_base_currency_column, add_composite_indexes
 from .api import trades, positions, prices, fx, dashboard, health, background, cash, accounts, snapshots, dividends, analysis, backup, splits, market, krx as krx_api
 from .services.background_price_service import background_price_service
 from .services.scheduler_service import snapshot_scheduler
@@ -56,6 +56,7 @@ async def lifespan(app: FastAPI):
     
     logger.info("DB 마이그레이션 실행 중...")
     ensure_base_currency_column(engine)
+    add_composite_indexes(engine)
     logger.info("DB 마이그레이션 완료")
 
     logger.info("백그라운드 가격 서비스 시작 중...")

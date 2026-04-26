@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, Text, JSON, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, Text, JSON, ForeignKey, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
@@ -39,6 +39,11 @@ class Trade(Base):
 
     # 관계 정의
     account = relationship("Account", back_populates="trades")
+
+    __table_args__ = (
+        Index("idx_trade_account_ticker", "account_id", "ticker"),
+        Index("idx_trade_account_date",   "account_id", "trade_date"),
+    )
 
 
 class RealizedPL(Base):
@@ -110,6 +115,10 @@ class Cash(Base):
     # 관계 정의
     account = relationship("Account", back_populates="cash_transactions")
 
+    __table_args__ = (
+        Index("idx_cash_account_date", "account_id", "transaction_date"),
+    )
+
 
 class DailySnapshot(Base):
     """일일 포트폴리오 스냅샷 테이블"""
@@ -133,8 +142,12 @@ class DailySnapshot(Base):
     total_unrealized_pl_usd = Column(Float, nullable=True)
     total_realized_pl_usd = Column(Float, nullable=True)
     total_pl_usd = Column(Float, nullable=True)
-    
+
     created_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_snapshot_account_date", "account_id", "snapshot_date"),
+    )
 
 
 class Dividend(Base):
