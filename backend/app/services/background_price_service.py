@@ -2,6 +2,7 @@
 백그라운드 주가 조회 서비스
 """
 import asyncio
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Callable
 import threading
@@ -12,6 +13,8 @@ from .position_engine import PositionEngine
 from .price_service import price_service
 from .market_resolver import resolve_market
 from .market_hours import is_krx_open, is_us_open
+
+logger = logging.getLogger(__name__)
 
 
 class BackgroundPriceService:
@@ -34,16 +37,16 @@ class BackgroundPriceService:
         """백그라운드 로딩 시작"""
         if self.is_running:
             return
-        
+
         self.is_running = True
         thread = threading.Thread(target=self._background_worker, daemon=True)
         thread.start()
-        print("Background price loading started")
+        logger.info("Background price loading started")
     
     def stop_background_loading(self):
         """백그라운드 로딩 중지"""
         self.is_running = False
-        print("Background price loading stopped")
+        logger.info("Background price loading stopped")
     
     def _interval_for(self, ticker: str) -> int:
         """티커의 시장 상태에 따른 갱신 주기(초) 반환"""
@@ -65,7 +68,7 @@ class BackgroundPriceService:
                 self._load_all_prices()
                 time.sleep(self.check_interval)
             except Exception as e:
-                print(f"Background price loading error: {e}")
+                logger.error("Background price loading error: %s", e)
                 time.sleep(60)  # 에러 시 1분 대기
     
     def _load_all_prices(self):
@@ -86,8 +89,8 @@ class BackgroundPriceService:
             
             if not active_tickers:
                 return
-            
-            print(f"Background loading prices for {len(active_tickers)} unique tickers: {', '.join(active_tickers)}")
+
+            logger.debug("Background loading prices for %d unique tickers: %s", len(active_tickers), ', '.join(active_tickers))
             
             # 시장별 갱신 필요 여부로 필터
             tickers_to_update = [t for t in active_tickers if self._should_update(t)]
@@ -102,7 +105,7 @@ class BackgroundPriceService:
                 self.loading_status['total'] = len(tickers_to_update)
                 self.loading_status['completed'] = 0
 
-            print(f"[BG] 갱신 대상 {len(tickers_to_update)}/{len(active_tickers)} 종목")
+            logger.debug("[BG] 갱신 대상 %d/%d 종목", len(tickers_to_update), len(active_tickers))
 
             # 로딩 상태 초기화
             with self._lock:
@@ -132,7 +135,7 @@ class BackgroundPriceService:
                         with self._lock:
                             self.loading_status['failed'] += 1
                 except Exception as e:
-                    print(f"Failed to load price for {ticker}: {e}")
+                    logger.warning("Failed to load price for %s: %s", ticker, e)
                     with self._lock:
                         self.loading_status['failed'] += 1
                 self._notify_callbacks()
@@ -142,12 +145,12 @@ class BackgroundPriceService:
                 self.loading_status['current_ticker'] = None
                 self.loading_status['estimated_completion'] = datetime.now()
                 self.last_update = datetime.now()
-            
-            print(f"Background price loading completed: {self.loading_status['completed']}/{self.loading_status['total']}")
+
+            logger.info("Background price loading completed: %d/%d", self.loading_status['completed'], self.loading_status['total'])
             self._notify_callbacks()
             
         except Exception as e:
-            print(f"Error in background price loading: {e}")
+            logger.error("Error in background price loading: %s", e)
     
     def get_loading_status(self) -> Dict:
         """현재 로딩 상태 반환"""
@@ -201,7 +204,7 @@ class BackgroundPriceService:
             try:
                 callback(status)
             except Exception as e:
-                print(f"Callback error: {e}")
+                logger.warning("Callback error: %s", e)
     
     def force_refresh(self):
         """강제로 가격 새로고침 시작"""
