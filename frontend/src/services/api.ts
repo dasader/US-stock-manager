@@ -84,6 +84,20 @@ api.interceptors.response.use(
   }
 );
 
+// Query string 빌더 — undefined/null 값 자동 제외
+export function buildQueryString(
+  params: Record<string, string | number | boolean | undefined | null>
+): string {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null) {
+      qs.append(key, String(value));
+    }
+  }
+  const str = qs.toString();
+  return str ? `?${str}` : '';
+}
+
 // Accounts
 export const accountsApi = {
   getAll: (isActive?: boolean) => 
