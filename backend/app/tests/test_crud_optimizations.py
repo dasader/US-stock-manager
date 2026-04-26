@@ -1,6 +1,5 @@
 """crud.py 최적화 항목 유닛 테스트"""
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from sqlalchemy.orm import Session
 from datetime import date
 
