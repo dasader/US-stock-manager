@@ -94,6 +94,7 @@ def test_get_multiple_prices_returns_all_tickers():
     with mock_patch.object(svc, "get_price", side_effect=lambda t: {"price_usd": 100.0, "ticker": t}):
         result = svc.get_multiple_prices(["AAPL", "MSFT", "GOOG"])
     assert set(result.keys()) == {"AAPL", "MSFT", "GOOG"}
+    assert result["AAPL"] is not None
     assert result["AAPL"]["price_usd"] == 100.0
 
 
