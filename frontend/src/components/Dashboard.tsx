@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { dashboardApi, backgroundApi, positionsApi, marketApi, accountsApi, fxApi } from '@/services/api';
+import { dashboardApi, backgroundApi, positionsApi, marketApi, fxApi } from '@/services/api';
 import { QUERY_CONFIG } from '@/constants/queryConfig';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useToast } from '@/hooks/useToast';
+import { useAccountCurrencyMap } from '@/hooks/useAccountCurrencyMap';
 import PortfolioChart from './PortfolioChart';
 import { useDisplayCurrency } from '../hooks/useDisplayCurrency';
 import { DisplayCurrencyToggle } from './dashboard/DisplayCurrencyToggle';
@@ -78,17 +79,8 @@ export default function Dashboard({ accountId }: DashboardProps) {
     retry: 1,
   });
 
-  // 계정 목록 (base_currency 조회용)
-  const { data: allAccounts } = useQuery({
-    queryKey: ['accounts', 'all'],
-    queryFn: async () => (await accountsApi.getAll()).data,
-    ...QUERY_CONFIG.LONG,
-  });
-  const accountCurrencyMap = useMemo(() => {
-    const m = new Map<number, Currency>();
-    (allAccounts ?? []).forEach((a: any) => m.set(a.id, (a.base_currency ?? 'USD') as Currency));
-    return m;
-  }, [allAccounts]);
+  // 계정별 통화 맵
+  const accountCurrencyMap = useAccountCurrencyMap();
 
   // FX 환율
   const { data: fxData } = useQuery({
