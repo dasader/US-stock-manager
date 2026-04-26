@@ -74,3 +74,45 @@ def test_group_trades_by_account_multiple_accounts():
     result = _group_trades_by_account(trades)
     assert len(result[1]) == 2
     assert len(result[2]) == 1
+
+
+from unittest.mock import patch as mock_patch
+from app.services.price_service import PriceService
+
+
+def _make_price_service():
+    svc = PriceService.__new__(PriceService)
+    svc.cache = {}
+    svc.cache_duration = 300
+    svc.validation_cache = {}
+    svc.validation_cache_duration = 3600
+    return svc
+
+
+def test_get_multiple_prices_returns_all_tickers():
+    svc = _make_price_service()
+    with mock_patch.object(svc, "get_price", side_effect=lambda t: {"price_usd": 100.0, "ticker": t}):
+        result = svc.get_multiple_prices(["AAPL", "MSFT", "GOOG"])
+    assert set(result.keys()) == {"AAPL", "MSFT", "GOOG"}
+    assert result["AAPL"]["price_usd"] == 100.0
+
+
+def test_get_multiple_prices_empty():
+    svc = _make_price_service()
+    result = svc.get_multiple_prices([])
+    assert result == {}
+
+
+def test_get_multiple_prices_handles_individual_failure():
+    svc = _make_price_service()
+
+    def side_effect(ticker):
+        if ticker == "FAIL":
+            raise RuntimeError("network error")
+        return {"price_usd": 50.0}
+
+    with mock_patch.object(svc, "get_price", side_effect=side_effect):
+        result = svc.get_multiple_prices(["AAPL", "FAIL"])
+
+    assert result["AAPL"] == {"price_usd": 50.0}
+    assert result["FAIL"] is None

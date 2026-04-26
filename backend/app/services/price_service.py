@@ -4,6 +4,7 @@
 import yfinance as yf
 from datetime import datetime
 from typing import Optional, Dict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from .market_resolver import resolve_market
 from .krx_service import krx_service
 
@@ -157,10 +158,25 @@ class PriceService:
         return result
 
     def get_multiple_prices(self, tickers: list) -> Dict[str, Optional[Dict]]:
-        """여러 티커의 가격을 한번에 조회"""
-        results = {}
-        for ticker in tickers:
-            results[ticker] = self.get_price(ticker)
+        """여러 티커의 가격을 ThreadPoolExecutor로 병렬 조회"""
+        if not tickers:
+            return {}
+
+        results: Dict[str, Optional[Dict]] = {}
+        max_workers = min(len(tickers), 8)
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_ticker = {
+                executor.submit(self.get_price, ticker): ticker
+                for ticker in tickers
+            }
+            for future in as_completed(future_to_ticker):
+                ticker = future_to_ticker[future]
+                try:
+                    results[ticker] = future.result()
+                except Exception:
+                    results[ticker] = None
+
         return results
 
     def validate_ticker(self, ticker: str) -> Dict:
