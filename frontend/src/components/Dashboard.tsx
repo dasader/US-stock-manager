@@ -85,7 +85,7 @@ export default function Dashboard({ accountId }: DashboardProps) {
   // FX 환율
   const { data: fxData } = useQuery({
     queryKey: ['fx-rate', 'USD', 'KRW'],
-    queryFn: () => fxApi.getUSDKRW().then((r) => r.data),
+    queryFn: () => fxApi.getUSDKRW().then((r: any) => r.data),
     ...QUERY_CONFIG.STATIC,
   });
   const fxUsdKrw = fxData?.rate ?? summary?.fx_rate_usd_krw ?? 1350;
