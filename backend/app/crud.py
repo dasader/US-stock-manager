@@ -397,15 +397,19 @@ def delete_trades_bulk(db: Session, trade_ids: List[int]) -> int:
 
 
 def get_existing_trade_hashes(db: Session) -> set:
-    """기존 거래의 해시셋을 반환 (중복 확인용)"""
-    trades = db.query(models.Trade).all()
-    trade_hashes = set()
-    
-    for trade in trades:
-        trade_hash = f"{trade.account_id}_{trade.ticker}_{trade.side}_{trade.shares}_{trade.price_usd}_{trade.trade_date.isoformat()}"
-        trade_hashes.add(trade_hash)
-    
-    return trade_hashes
+    """기존 거래의 해시셋을 반환 (중복 확인용) — 필요한 컬럼만 SELECT"""
+    rows = db.query(
+        models.Trade.account_id,
+        models.Trade.ticker,
+        models.Trade.side,
+        models.Trade.shares,
+        models.Trade.price_usd,
+        models.Trade.trade_date,
+    ).all()
+    return {
+        f"{r.account_id}_{r.ticker}_{r.side}_{r.shares}_{r.price_usd}_{r.trade_date.isoformat()}"
+        for r in rows
+    }
 
 
 # DailySnapshot CRUD operations
