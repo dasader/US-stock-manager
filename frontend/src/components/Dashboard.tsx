@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { dashboardApi, backgroundApi, positionsApi, marketApi, accountsApi, fxApi } from '@/services/api';
+import { QUERY_CONFIG } from '@/constants/queryConfig';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DashboardSkeleton } from '@/components/ui/skeleton';
@@ -53,7 +54,7 @@ export default function Dashboard({ accountId }: DashboardProps) {
           display_currency: displayCurrency,
         })
         .then((res) => res.data),
-    refetchInterval: 60000,
+    ...QUERY_CONFIG.MEDIUM,
     retry: 3,
     retryDelay: 1000,
   });
@@ -65,7 +66,7 @@ export default function Dashboard({ accountId }: DashboardProps) {
       positionsApi
         .getAll({ account_id: accountId || undefined, include_closed: false })
         .then((res) => res.data),
-    refetchInterval: 60000,
+    ...QUERY_CONFIG.MEDIUM,
     retry: 2,
   });
 
@@ -73,7 +74,7 @@ export default function Dashboard({ accountId }: DashboardProps) {
   const { data: nasdaqData } = useQuery({
     queryKey: ['nasdaq-index'],
     queryFn: () => marketApi.getNasdaqIndex().then((r) => r.data),
-    refetchInterval: 60000,
+    ...QUERY_CONFIG.MEDIUM,
     retry: 1,
   });
 
@@ -81,6 +82,7 @@ export default function Dashboard({ accountId }: DashboardProps) {
   const { data: allAccounts } = useQuery({
     queryKey: ['accounts', 'all'],
     queryFn: async () => (await accountsApi.getAll()).data,
+    ...QUERY_CONFIG.LONG,
   });
   const accountCurrencyMap = useMemo(() => {
     const m = new Map<number, Currency>();
@@ -92,7 +94,7 @@ export default function Dashboard({ accountId }: DashboardProps) {
   const { data: fxData } = useQuery({
     queryKey: ['fx-rate', 'USD', 'KRW'],
     queryFn: () => fxApi.getUSDKRW().then((r) => r.data),
-    staleTime: 60_000,
+    ...QUERY_CONFIG.STATIC,
   });
   const fxUsdKrw = fxData?.rate ?? summary?.fx_rate_usd_krw ?? 1350;
 
@@ -110,7 +112,7 @@ export default function Dashboard({ accountId }: DashboardProps) {
   const { data: bgStatus } = useQuery({
     queryKey: ['background-loading-status'],
     queryFn: () => backgroundApi.getPriceLoadingStatus().then((res) => res.data),
-    refetchInterval: 2000,
+    ...QUERY_CONFIG.REALTIME,
   });
 
   useEffect(() => {
