@@ -50,3 +50,27 @@ def test_get_existing_trade_hashes_no_full_objects_loaded():
     assert not any(arg is models.Trade for arg in call_args), (
         "get_existing_trade_hashes should query specific columns, not the full Trade model"
     )
+
+
+from app.services.scheduler_service import _group_trades_by_account
+
+
+def test_group_trades_by_account_empty():
+    assert _group_trades_by_account([]) == {}
+
+
+def test_group_trades_by_account_single():
+    trades = [{"account_id": 1, "ticker": "AAPL", "shares": 10}]
+    result = _group_trades_by_account(trades)
+    assert result == {1: [{"account_id": 1, "ticker": "AAPL", "shares": 10}]}
+
+
+def test_group_trades_by_account_multiple_accounts():
+    trades = [
+        {"account_id": 1, "ticker": "AAPL", "shares": 10},
+        {"account_id": 2, "ticker": "MSFT", "shares": 5},
+        {"account_id": 1, "ticker": "GOOG", "shares": 3},
+    ]
+    result = _group_trades_by_account(trades)
+    assert len(result[1]) == 2
+    assert len(result[2]) == 1

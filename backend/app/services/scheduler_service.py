@@ -17,6 +17,18 @@ from ..services.price_aggregator import price_aggregator
 
 logger = logging.getLogger(__name__)
 
+
+def _group_trades_by_account(trades: list) -> dict:
+    """거래 목록을 account_id 기준으로 분리 (N+1 쿼리 방지)"""
+    grouped: dict = {}
+    for trade in trades:
+        acc_id = trade["account_id"]
+        if acc_id not in grouped:
+            grouped[acc_id] = []
+        grouped[acc_id].append(trade)
+    return grouped
+
+
 class SnapshotScheduler:
     """스냅샷 자동 생성 스케줄러"""
     
@@ -244,10 +256,11 @@ def create_daily_snapshot_job() -> dict:
                     crud.create_snapshot(db, snapshot_position)
                     created_count += 1
 
-        # 계정별 스냅샷 생성
+        # 계정별 스냅샷 생성 — all_trades 재사용으로 N+1 제거
         accounts = crud.get_accounts(db, is_active=True)
+        trades_by_account = _group_trades_by_account(all_trades)
         for account in accounts:
-            account_trades = crud.get_all_trades_for_calculation(db, account.id)
+            account_trades = trades_by_account.get(account.id, [])
             engine_account = PositionEngine()
             engine_account.process_trades(account_trades)
             positions_account = engine_account.get_all_positions(include_closed=False)
