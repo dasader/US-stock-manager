@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { dashboardApi, backgroundApi, positionsApi, marketApi, fxApi } from '@/services/api';
+import { dashboardApi, backgroundApi, positionsApi, marketApi } from '@/services/api';
 import { QUERY_CONFIG } from '@/constants/queryConfig';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ import {
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useToast } from '@/hooks/useToast';
 import { useAccountCurrencyMap } from '@/hooks/useAccountCurrencyMap';
+import { useCurrencyConversion } from '@/hooks/useCurrencyConversion';
 import PortfolioChart from './PortfolioChart';
 import { useDisplayCurrency } from '../hooks/useDisplayCurrency';
 import { DisplayCurrencyToggle } from './dashboard/DisplayCurrencyToggle';
@@ -82,20 +83,9 @@ export default function Dashboard({ accountId }: DashboardProps) {
   // 계정별 통화 맵
   const accountCurrencyMap = useAccountCurrencyMap();
 
-  // FX 환율
-  const { data: fxData } = useQuery({
-    queryKey: ['fx-rate', 'USD', 'KRW'],
-    queryFn: () => fxApi.getUSDKRW().then((r: any) => r.data),
-    ...QUERY_CONFIG.STATIC,
-  });
-  const fxUsdKrw = fxData?.rate ?? summary?.fx_rate_usd_krw ?? 1350;
-
-  const toDisplay = (amount: number, cur: Currency): number => {
-    if (cur === displayCurrency) return amount;
-    if (cur === 'USD' && displayCurrency === 'KRW') return amount * fxUsdKrw;
-    if (cur === 'KRW' && displayCurrency === 'USD') return fxUsdKrw > 0 ? amount / fxUsdKrw : 0;
-    return amount;
-  };
+  // FX 환율 및 통화 변환
+  const { toDisplay, fxRate } = useCurrencyConversion();
+  const fxUsdKrw = fxRate ?? summary?.fx_rate_usd_krw ?? 1350;
 
   const getCurForAccount = (accountId?: number): Currency =>
     accountId != null ? (accountCurrencyMap.get(accountId) ?? 'USD') : 'USD';
