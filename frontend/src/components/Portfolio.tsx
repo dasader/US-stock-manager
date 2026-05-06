@@ -639,6 +639,7 @@ export default function Portfolio({ accountId }: PortfolioProps) {
                     tick={{ fontSize: 11, fill: chartTheme.muted }}
                     tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
                     width={55}
+                    domain={[(dataMin: number) => Math.floor(dataMin * 0.97), (dataMax: number) => Math.ceil(dataMax * 1.03)]}
                   />
                   <RechartsTooltip content={<ChartTooltip />} />
                   <Area

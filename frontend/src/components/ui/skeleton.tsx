@@ -81,23 +81,3 @@ export function TableSkeleton({ rows = 5, columns = 5 }: { rows?: number; column
     </div>
   );
 }
-
-export function DashboardSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <Skeleton variant="text" width="180px" height={36} />
-        <Skeleton variant="rectangular" width="100px" height={32} />
-      </div>
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <FinancialCardSkeleton key={i} />
-        ))}
-      </div>
-      <div className="rounded-xl border border-border/60 bg-card shadow-obsidian p-5">
-        <Skeleton variant="text" width="120px" height={24} className="mb-4" />
-        <Skeleton variant="rectangular" width="100%" height={280} />
-      </div>
-    </div>
-  );
-}

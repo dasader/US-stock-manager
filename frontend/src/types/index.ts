@@ -178,13 +178,6 @@ export interface DailySnapshot {
   created_at: string;
 }
 
-export interface PortfolioChartData {
-  date: string;
-  total_market_value_usd: number;
-  total_cost_usd: number;
-  total_pl_usd: number;
-  total_pl_percent: number;
-}
 
 export interface Dividend {
   id: number;
