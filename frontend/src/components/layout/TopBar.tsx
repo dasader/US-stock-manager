@@ -36,7 +36,7 @@ export default function TopBar({
     : '';
 
   return (
-    <header className="h-[var(--topbar-height)] border-b border-border/50 bg-card/80 backdrop-blur-xl flex items-center px-4 md:px-6 lg:px-8 gap-3 sticky top-0 z-40">
+    <header className="h-[var(--topbar-height)] border-b border-border/50 bg-card/80 backdrop-blur-xl flex items-center px-4 md:px-6 lg:px-8 gap-3 sticky top-0 z-50">
       {/* Mobile logo */}
       <div className="md:hidden flex items-center gap-2 mr-auto">
         <div className="w-8 h-8 rounded-lg gold-gradient flex items-center justify-center shadow-glow-gold">

@@ -25,7 +25,6 @@ import {
 import { formatCurrency, formatCurrencyInt, formatPercent, formatNumber, cn } from '@/lib/utils';
 import { useChartTheme } from '@/hooks/useChartTheme';
 import { useToast } from '@/hooks/useToast';
-import { useDisplayCurrency } from '@/hooks/useDisplayCurrency';
 import { DisplayCurrencyToggle } from './dashboard/DisplayCurrencyToggle';
 import { CurrencyBadge } from './accounts/CurrencyBadge';
 import {
@@ -165,8 +164,7 @@ export default function Portfolio({ accountId }: PortfolioProps) {
   const chartTheme = useChartTheme();
 
   // Display currency toggle
-  const [displayCurrency, setDisplayCurrency] = useDisplayCurrency();
-  const { toDisplay } = useCurrencyConversion();
+  const { toDisplay, displayCurrency, setDisplayCurrency } = useCurrencyConversion();
   const accountCurrencyMap = useAccountCurrencyMap();
 
   // Tab & section refs
@@ -482,15 +480,15 @@ export default function Portfolio({ accountId }: PortfolioProps) {
       )}
 
       {/* ---- Sticky sub-nav pills ---- */}
-      <div className="sticky top-0 z-40 -mx-1 px-1 py-3 backdrop-blur-xl bg-background/70 border-b border-border/30">
-        <div className="flex items-center justify-between">
-          <div className="flex gap-1 rounded-lg bg-muted/50 p-1">
+      <div className="sticky top-[var(--topbar-height)] z-30 -mx-1 px-1 py-2 backdrop-blur-xl bg-background/80 border-b border-border/30">
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <div className="flex gap-1 rounded-lg bg-muted/50 p-1 shrink-0">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => scrollTo(tab.id)}
                 className={cn(
-                  'px-4 py-1.5 rounded-md text-sm font-medium transition-all duration-200',
+                  'px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200',
                   activeTab === tab.id
                     ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted',
@@ -500,16 +498,16 @@ export default function Portfolio({ accountId }: PortfolioProps) {
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
             {summary && (
-              <span className="text-xs text-muted-foreground font-numeric hidden sm:inline">
+              <span className="text-xs text-muted-foreground font-numeric hidden lg:inline shrink-0">
                 USD/KRW {formatNumber(summary.fx_rate_usd_krw, 0)}
               </span>
             )}
             <DisplayCurrencyToggle value={displayCurrency} onChange={setDisplayCurrency} />
-            <Button onClick={handleForceRefresh} variant="outline" size="sm" className="hover-lift">
-              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-              새로고침
+            <Button onClick={handleForceRefresh} variant="outline" size="sm" className="hover-lift shrink-0">
+              <RefreshCw className="h-3.5 w-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">새로고침</span>
             </Button>
           </div>
         </div>
@@ -518,7 +516,7 @@ export default function Portfolio({ accountId }: PortfolioProps) {
       {/* ==================================================================
          SECTION 1: Summary
          ================================================================== */}
-      <section ref={summaryRef} className="pt-6 space-y-5 scroll-mt-16">
+      <section ref={summaryRef} className="pt-6 space-y-5 scroll-mt-[calc(var(--topbar-height)+var(--subnav-height))]">
         {/* KPI Bento Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {/* NASDAQ */}
@@ -806,7 +804,7 @@ export default function Portfolio({ accountId }: PortfolioProps) {
       {/* ==================================================================
          SECTION 2: Holdings
          ================================================================== */}
-      <section ref={holdingsRef} className="pt-8 space-y-4 scroll-mt-16">
+      <section ref={holdingsRef} className="pt-8 space-y-4 scroll-mt-[calc(var(--topbar-height)+var(--subnav-height))]">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <h2 className="text-xl font-bold tracking-tight">보유종목</h2>
           <div className="flex items-center gap-2 flex-wrap">
@@ -989,7 +987,7 @@ export default function Portfolio({ accountId }: PortfolioProps) {
       {/* ==================================================================
          SECTION 3: Analysis
          ================================================================== */}
-      <section ref={analysisRef} className="pt-8 space-y-5 scroll-mt-16">
+      <section ref={analysisRef} className="pt-8 space-y-5 scroll-mt-[calc(var(--topbar-height)+var(--subnav-height))]">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold tracking-tight">분석</h2>
           {analysis && (

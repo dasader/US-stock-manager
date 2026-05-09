@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cashApi, dividendsApi, accountsApi, tradesApi } from '@/services/api';
-import { useDisplayCurrency } from '../hooks/useDisplayCurrency';
 import { useCurrencyConversion } from '@/hooks/useCurrencyConversion';
 import { useAccountCurrencyMap } from '@/hooks/useAccountCurrencyMap';
 import { QUERY_CONFIG } from '@/constants/queryConfig';
@@ -99,8 +98,7 @@ export default function CashFlow({ accountId }: CashFlowProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const chartTheme = useChartTheme();
-  const [displayCurrency] = useDisplayCurrency();
-  const { toDisplay } = useCurrencyConversion();
+  const { toDisplay, displayCurrency } = useCurrencyConversion();
   const accountCurrencyMap = useAccountCurrencyMap();
 
   // --- State ---

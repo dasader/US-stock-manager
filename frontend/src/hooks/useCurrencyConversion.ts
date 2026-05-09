@@ -9,10 +9,11 @@ interface UseCurrencyConversionReturn {
   toDisplay: (amount: number, sourceCurrency: Currency) => number;
   fxRate: number | undefined;
   displayCurrency: Currency;
+  setDisplayCurrency: (c: Currency) => void;
 }
 
 export function useCurrencyConversion(): UseCurrencyConversionReturn {
-  const [displayCurrency] = useDisplayCurrency();
+  const [displayCurrency, setDisplayCurrency] = useDisplayCurrency();
 
   const { data: fxData } = useQuery({
     queryKey: ['fx-rate', 'USD', 'KRW'],
@@ -33,5 +34,5 @@ export function useCurrencyConversion(): UseCurrencyConversionReturn {
     [displayCurrency, fxRate]
   );
 
-  return { toDisplay, fxRate, displayCurrency };
+  return { toDisplay, fxRate, displayCurrency, setDisplayCurrency };
 }
